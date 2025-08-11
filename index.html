@@ -64,6 +64,14 @@
   }
   .fixed-legend .sw{width:10px; height:10px; border-radius:50%}
   .fixed-legend .val{font-weight:700}
+
+  @media (max-width: 420px){
+    .fixed-legend{
+      bottom: 18px;
+      font-size: 11px;
+      min-width: 190px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -204,6 +212,9 @@
   };
   const ctx = els.canvas.getContext('2d');
 
+  // Padding interno del riquadro disegnabile
+  const PAD = { top: 28, right: 12, bottom: 42, left: 46 };
+
   // Default: oggi
   const today = new Date();
   els.target.value = toISO(today);
@@ -247,6 +258,18 @@
     return {xs, series, start, end};
   }
 
+  // ========= Mapping coordinate =========
+  function mapY(v){ // v -1..+1 -> y in pixel
+    const h = els.canvas.height;
+    const drawable = h - PAD.top - PAD.bottom;
+    return PAD.top + (1 - ((v + 1)/2)) * drawable;
+  }
+  function mapX(i, total){ // indice giorno -> x in pixel
+    const w = els.canvas.width;
+    const drawable = w - PAD.left - PAD.right;
+    return PAD.left + (i/total) * drawable;
+  }
+
   // ========= Rendering Canvas =========
   let lastData = null; // {xs, series, start, end, total}
   let crossIndex = null; // indice attivo per il marcatore verticale
@@ -254,51 +277,49 @@
   function clearCanvas(){
     const {width, height} = els.canvas;
     ctx.clearRect(0,0,width,height);
-    // griglia leggera
-    ctx.fillStyle = 'rgba(255,255,255,0.02)';
-    for(let y=0;y<height;y+=20){ ctx.fillRect(0,y,width,1); }
-    for(let x=0;x<width;x+=40){ ctx.fillRect(x,0,1,height); }
+    // griglia leggera nel riquadro disegnabile
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    const stepY = 20, stepX = 40;
+    for(let y = PAD.top; y < height - PAD.bottom; y += stepY){
+      ctx.fillRect(PAD.left, y, width - PAD.left - PAD.right, 1);
+    }
+    for(let x = PAD.left; x < width - PAD.right; x += stepX){
+      ctx.fillRect(x, PAD.top, 1, height - PAD.top - PAD.bottom);
+    }
   }
 
   function drawAxes(dateStart, dateEnd){
     const {width, height} = els.canvas;
 
-    // linea orizzontale 0
-    const mid = height/2;
+    // asse Y=0
+    const mid = mapY(0);
     ctx.strokeStyle = '#2a2d3a';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(width, mid); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD.left, mid); ctx.lineTo(width - PAD.right, mid); ctx.stroke();
 
-    // tacche verticali sottili ogni 5 giorni
+    // tacche verticali leggere ogni 5 giorni
     const totalDays = Math.max(1, daysBetween(dateStart, dateEnd));
     for(let i=0;i<=totalDays;i++){
       if(i % 5 === 0){
-        const x = (i/totalDays) * width;
+        const x = mapX(i, totalDays);
         ctx.globalAlpha = 0.2;
-        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, height - PAD.bottom); ctx.stroke();
         ctx.globalAlpha = 1;
       }
     }
 
-    // etichette date agli estremi
+    // etichette date agli estremi (in alto, dentro il padding)
     ctx.fillStyle = '#9aa0ac';
     ctx.font = (window.innerWidth < 480 ? '13px' : '12px') + ' system-ui, -apple-system, Segoe UI, Roboto';
-    ctx.fillText(fmt(dateStart), 8, 16);
+    ctx.textAlign = 'left';
+    ctx.fillText(fmt(dateStart), PAD.left + 4, PAD.top - 8 + 22);
     const text = fmt(dateEnd);
     const tw = ctx.measureText(text).width;
-    ctx.fillText(text, width - tw - 8, 16);
+    ctx.textAlign = 'right';
+    ctx.fillText(text, width - PAD.right - 4, PAD.top - 8 + 22);
 
-    // etichette numeriche Y
     drawYAxisLabels();
-
-    // etichette X ogni 7 giorni (sempre)
     drawXAxisLabels(dateStart, dateEnd, 7);
-  }
-
-  function mapY(v){ // v -1..+1 -> y
-    const {height} = els.canvas;
-    const padding = 24;
-    return (height - padding) - ((v + 1)/2) * (height - padding*2);
   }
 
   // Y labels: +100, +50, 0, -50, -100
@@ -314,21 +335,23 @@
 
     ticks.forEach(t=>{
       const y = mapY(t);
-      // linea guida
+      // linea guida dentro ai paddings
       ctx.globalAlpha = t===0 ? 1 : 0.25;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
-      // testo a sinistra
+      ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(width - PAD.right, y); ctx.stroke();
+
+      // testo a sinistra (dentro il padding)
       ctx.globalAlpha = 1;
       const label = (t*100>0?'+':'') + Math.round(t*100);
+      ctx.textAlign = 'left';
       ctx.fillText(label, 8, y - 4);
     });
     ctx.restore();
   }
 
-  // X labels ogni step giorni
+  // X labels ogni "stepDays" giorni
   function drawXAxisLabels(dateStart, dateEnd, stepDays){
     const totalDays = Math.max(1, daysBetween(dateStart, dateEnd));
-    const {width, height} = els.canvas;
+    const {height} = els.canvas;
     const step = Math.max(1, stepDays|0);
 
     ctx.save();
@@ -338,28 +361,27 @@
     ctx.textAlign = 'center';
 
     for(let i=0;i<=totalDays;i+=step){
-      const x = (i/totalDays) * width;
+      const x = mapX(i, totalDays);
       // piccola tacca
       ctx.globalAlpha = .6;
-      ctx.beginPath(); ctx.moveTo(x, height-18); ctx.lineTo(x, height-10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, height - PAD.bottom + 4); ctx.lineTo(x, height - PAD.bottom + 12); ctx.stroke();
       ctx.globalAlpha = 1;
 
       const d = new Date(dateStart); d.setDate(dateStart.getDate()+i);
       const lab = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
-      ctx.fillText(lab, x, height-2);
+      ctx.fillText(lab, x, height - 6); // più in su del bordo
     }
     ctx.restore();
   }
 
   function drawLine(values, color){
-    const {width} = els.canvas;
     const n = values.length - 1;
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
     values.forEach((v,i)=>{
       if(v === null) return;
-      const x = (i/n) * width;
+      const x = mapX(i, n);
       const y = mapY(v);
       if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     });
@@ -368,22 +390,25 @@
 
   function drawToday(centerDate, start, end){
     const total = Math.max(1, daysBetween(start,end));
-    const i = daysBetween(start, centerDate);
-    const x = (i/total) * els.canvas.width;
-    ctx.strokeStyle = '#6aa6ff'; ctx.setLineDash([4,4]); ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,els.canvas.height); ctx.stroke();
-    ctx.setLineDash([]);
+    const i = Math.max(0, Math.min(total, daysBetween(start, centerDate)));
+    const x = mapX(i, total);
+    ctx.save();
+    ctx.strokeStyle = '#6aa6ff';
+    ctx.setLineDash([4,4]);
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, els.canvas.height - PAD.bottom); ctx.stroke();
+    ctx.restore();
   }
 
   function drawCrosshair(i){
     if(!lastData) return;
-    const {start, total} = lastData;
-    const x = (i/total) * els.canvas.width;
+    const {total} = lastData;
+    const x = mapX(i, total);
     ctx.save();
     ctx.strokeStyle = 'rgba(106,166,255,.9)';
     ctx.setLineDash([6,4]);
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,els.canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, els.canvas.height - PAD.bottom); ctx.stroke();
     ctx.restore();
   }
 
@@ -424,7 +449,7 @@
   }
 
   function render(){
-    if(!els.dob.value){ // niente alert prima dell’input; pulizia base
+    if(!els.dob.value){ // niente alert prima dell’input; disegna solo assi
       clearCanvas(); drawAxes(new Date(), new Date());
       return;
     }
@@ -457,7 +482,7 @@
     const total = data.xs.length - 1;
     crits.forEach(({d,color})=>{
       const i = daysBetween(data.start,d);
-      const x = (i/total) * els.canvas.width;
+      const x = mapX(i, total);
       const y = mapY(0);
       ctx.fillStyle = color; ctx.strokeStyle = '#000'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
@@ -476,11 +501,11 @@
       els.showIntu.checked
     );
 
-    // se c'è un crossIndex attivo, ridisegniamo il marcatore sopra
+    // se c'è un crossIndex attivo, ridisegna il marcatore sopra
     if(crossIndex!=null){ drawCrosshair(crossIndex); }
   }
 
-  // ========= Interazione: crosshair + legenda fissa aggiornata =========
+  // ========= Interazione: crosshair + legenda fissa aggiornata (auto-lato) =========
   function nearestIndexFromClientX(clientX){
     if(!lastData) return null;
     const rect = els.canvas.getBoundingClientRect();
@@ -492,8 +517,8 @@
   function updateInteractionAt(i){
     if(!lastData) return;
     crossIndex = i;
-    // ridisegna tutto (marcatore compreso)
-    render();
+    render(); // ridisegna tutto (marcatore incluso)
+
     // aggiorna legenda sui valori correnti
     updateFixedLegend(
       lastData.xs[i],
@@ -505,10 +530,20 @@
       },
       els.showIntu.checked
     );
+
+    // sposta la legenda a sinistra/destra per non coprire il punto attivo
+    const half = els.canvas.width / 2;
+    const x = mapX(i, lastData.total);
+    const isRight = x > half;
+    els.legendBox.style.left  = isRight ? '' : '10px';
+    els.legendBox.style.right = isRight ? '10px' : '';
   }
 
   function clearInteraction(){
     crossIndex = null;
+    // reset posizione legenda lato sinistro
+    els.legendBox.style.right = '';
+    els.legendBox.style.left  = '10px';
     render();
   }
 
