@@ -35,6 +35,7 @@
   button.primary{background:var(--accent); border-color:transparent; color:#0b1220; font-weight:600}
   button:disabled{opacity:.6; cursor:not-allowed}
   canvas{width:100%; height:360px; background:linear-gradient(180deg,#0f111a,#141724); border:1px solid var(--line); border-radius:12px}
+
   .legend{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 0}
   .chip{display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:999px; background:var(--chip); border:1px solid var(--line); color:var(--ink); font-size:13px}
   .dot{width:12px; height:12px; border-radius:50%}
@@ -49,6 +50,20 @@
   .notice{margin-top:8px; font-size:12px; color:var(--muted)}
   .divider{height:1px; background:var(--line); margin:12px 0}
   footer{color:var(--muted); text-align:center; font-size:12px; padding:20px 0}
+
+  /* Legenda fissa nel riquadro del grafico */
+  .fixed-legend{
+    position:absolute; left:10px; bottom:10px; z-index:2;
+    background:rgba(20,22,34,.9); border:1px solid var(--line);
+    border-radius:10px; padding:8px 10px; min-width:210px;
+    font-size:12px; color:var(--ink); box-shadow:0 6px 20px rgba(0,0,0,.35);
+  }
+  .fixed-legend .title{font-weight:600; margin-bottom:6px}
+  .fixed-legend .row{
+    display:grid; grid-template-columns:12px 1fr auto; gap:6px 8px; align-items:center;
+  }
+  .fixed-legend .sw{width:10px; height:10px; border-radius:50%}
+  .fixed-legend .val{font-weight:700}
 </style>
 </head>
 <body>
@@ -108,7 +123,35 @@
 
       <!-- Grafico -->
       <section>
-        <canvas id="chart" width="1200" height="420" aria-label="Grafico bioritmo" role="img"></canvas>
+        <div id="canvasWrap" style="position:relative">
+          <canvas id="chart" width="1200" height="420" aria-label="Grafico bioritmo" role="img"></canvas>
+
+          <!-- Legenda fissa -->
+          <div class="fixed-legend" id="fixedLegend">
+            <div class="title" id="legendDate">—</div>
+            <div class="row">
+              <span class="sw" style="background:var(--ok)"></span>
+              <span>Fisico</span>
+              <span class="val" id="vPh">—</span>
+            </div>
+            <div class="row">
+              <span class="sw" style="background:var(--warn)"></span>
+              <span>Emotivo</span>
+              <span class="val" id="vEm">—</span>
+            </div>
+            <div class="row">
+              <span class="sw" style="background:var(--bad)"></span>
+              <span>Intellettuale</span>
+              <span class="val" id="vIn">—</span>
+            </div>
+            <div class="row" id="rowIntu" style="display:none">
+              <span class="sw" style="background:var(--intu)"></span>
+              <span>Intuizione</span>
+              <span class="val" id="vIntu">—</span>
+            </div>
+          </div>
+        </div>
+
         <div class="legend" aria-hidden="true">
           <span class="chip"><span class="dot ph"></span> Fisico</span>
           <span class="chip"><span class="dot em"></span> Emotivo</span>
@@ -124,7 +167,7 @@
 <script>
 "use strict";
 (function(){
-  // ========= Utility data =========
+  // ========= Utility =========
   const $ = (sel)=>document.querySelector(sel);
   const fmt = (d)=>d.toLocaleDateString('it-IT',{year:'numeric',month:'2-digit',day:'2-digit'});
   const parseISO = (s)=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
@@ -153,7 +196,13 @@
     statIn: $('#statIn'),
     statIntu: $('#statIntu'),
     canvas: $('#chart'),
+    wrap: $('#canvasWrap'),
+    legendBox: $('#fixedLegend'),
+    legendDate: $('#legendDate'),
+    vPh: $('#vPh'), vEm: $('#vEm'), vIn: $('#vIn'), vIntu: $('#vIntu'),
+    rowIntu: $('#rowIntu')
   };
+  const ctx = els.canvas.getContext('2d');
 
   // Default: oggi
   const today = new Date();
@@ -199,11 +248,13 @@
   }
 
   // ========= Rendering Canvas =========
-  const ctx = els.canvas.getContext('2d');
+  let lastData = null; // {xs, series, start, end, total}
+  let crossIndex = null; // indice attivo per il marcatore verticale
 
   function clearCanvas(){
     const {width, height} = els.canvas;
     ctx.clearRect(0,0,width,height);
+    // griglia leggera
     ctx.fillStyle = 'rgba(255,255,255,0.02)';
     for(let y=0;y<height;y+=20){ ctx.fillRect(0,y,width,1); }
     for(let x=0;x<width;x+=40){ ctx.fillRect(x,0,1,height); }
@@ -211,12 +262,15 @@
 
   function drawAxes(dateStart, dateEnd){
     const {width, height} = els.canvas;
+
+    // linea orizzontale 0
     const mid = height/2;
     ctx.strokeStyle = '#2a2d3a';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(width, mid); ctx.stroke();
 
-    const totalDays = daysBetween(dateStart, dateEnd);
+    // tacche verticali sottili ogni 5 giorni
+    const totalDays = Math.max(1, daysBetween(dateStart, dateEnd));
     for(let i=0;i<=totalDays;i++){
       if(i % 5 === 0){
         const x = (i/totalDays) * width;
@@ -226,17 +280,75 @@
       }
     }
 
-    ctx.fillStyle = '#9aa0ac'; ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto';
+    // etichette date agli estremi
+    ctx.fillStyle = '#9aa0ac';
+    ctx.font = (window.innerWidth < 480 ? '13px' : '12px') + ' system-ui, -apple-system, Segoe UI, Roboto';
     ctx.fillText(fmt(dateStart), 8, 16);
     const text = fmt(dateEnd);
     const tw = ctx.measureText(text).width;
     ctx.fillText(text, width - tw - 8, 16);
+
+    // etichette numeriche Y
+    drawYAxisLabels();
+
+    // etichette X ogni 7 giorni (sempre)
+    drawXAxisLabels(dateStart, dateEnd, 7);
   }
 
-  function mapY(v){
+  function mapY(v){ // v -1..+1 -> y
     const {height} = els.canvas;
     const padding = 24;
     return (height - padding) - ((v + 1)/2) * (height - padding*2);
+  }
+
+  // Y labels: +100, +50, 0, -50, -100
+  function drawYAxisLabels(){
+    const ticks = [1, 0.5, 0, -0.5, -1];
+    const {width} = els.canvas;
+
+    ctx.save();
+    ctx.font = (window.innerWidth < 480 ? '14px' : '12px') + ' system-ui, -apple-system, Segoe UI, Roboto';
+    ctx.fillStyle = '#9aa0ac';
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 1;
+
+    ticks.forEach(t=>{
+      const y = mapY(t);
+      // linea guida
+      ctx.globalAlpha = t===0 ? 1 : 0.25;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+      // testo a sinistra
+      ctx.globalAlpha = 1;
+      const label = (t*100>0?'+':'') + Math.round(t*100);
+      ctx.fillText(label, 8, y - 4);
+    });
+    ctx.restore();
+  }
+
+  // X labels ogni step giorni
+  function drawXAxisLabels(dateStart, dateEnd, stepDays){
+    const totalDays = Math.max(1, daysBetween(dateStart, dateEnd));
+    const {width, height} = els.canvas;
+    const step = Math.max(1, stepDays|0);
+
+    ctx.save();
+    ctx.fillStyle = '#9aa0ac';
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.font = (window.innerWidth < 480 ? '12px' : '11px') + ' system-ui, -apple-system, Segoe UI, Roboto';
+    ctx.textAlign = 'center';
+
+    for(let i=0;i<=totalDays;i+=step){
+      const x = (i/totalDays) * width;
+      // piccola tacca
+      ctx.globalAlpha = .6;
+      ctx.beginPath(); ctx.moveTo(x, height-18); ctx.lineTo(x, height-10); ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      const d = new Date(dateStart); d.setDate(dateStart.getDate()+i);
+      const lab = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
+      ctx.fillText(lab, x, height-2);
+    }
+    ctx.restore();
   }
 
   function drawLine(values, color){
@@ -255,12 +367,24 @@
   }
 
   function drawToday(centerDate, start, end){
-    const total = daysBetween(start,end);
+    const total = Math.max(1, daysBetween(start,end));
     const i = daysBetween(start, centerDate);
     const x = (i/total) * els.canvas.width;
     ctx.strokeStyle = '#6aa6ff'; ctx.setLineDash([4,4]); ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,els.canvas.height); ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  function drawCrosshair(i){
+    if(!lastData) return;
+    const {start, total} = lastData;
+    const x = (i/total) * els.canvas.width;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(106,166,255,.9)';
+    ctx.setLineDash([6,4]);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,els.canvas.height); ctx.stroke();
+    ctx.restore();
   }
 
   function findCriticals(xs, arr){
@@ -285,55 +409,137 @@
     els.statIntu.textContent = vIntu===null ? '—' : percent(vIntu) + '%';
   }
 
+  // Aggiorna legenda fissa
+  function updateFixedLegend(date, vals, showIntu){
+    els.legendDate.textContent = fmt(date);
+    els.vPh.textContent = (vals.ph!=null? percent(vals.ph)+'%':'—');
+    els.vEm.textContent = (vals.em!=null? percent(vals.em)+'%':'—');
+    els.vIn.textContent = (vals.intel!=null? percent(vals.intel)+'%':'—');
+    if(showIntu){
+      els.rowIntu.style.display='grid';
+      els.vIntu.textContent = (vals.intu!=null? percent(vals.intu)+'%':'—');
+    } else {
+      els.rowIntu.style.display='none';
+    }
+  }
+
   function render(){
-    if(!els.dob.value){ return; } // evita alert su GitHub Pages prima dell’input
+    if(!els.dob.value){ // niente alert prima dell’input; pulizia base
+      clearCanvas(); drawAxes(new Date(), new Date());
+      return;
+    }
     if(!els.target.value){ els.target.value = toISO(new Date()); }
     const dob = parseISO(els.dob.value);
     const target = parseISO(els.target.value);
     const span = Math.max(7, Math.min(120, Number(els.span.value)||30));
     els.span.value = span;
 
+    const data = computeSeries(dob, target, span, els.showIntu.checked);
+    lastData = {...data, total: data.xs.length-1};
+
     updateStats(dob, target, els.showIntu.checked);
 
-    const {xs, series, start, end} = computeSeries(dob, target, span, els.showIntu.checked);
-
     clearCanvas();
-    drawAxes(start, end);
-    drawLine(series.ph, periods.ph.color);
-    drawLine(series.em, periods.em.color);
-    drawLine(series.intel, periods.intel.color);
-    if(els.showIntu.checked) drawLine(series.intu, periods.intu.color);
-    drawToday(target, start, end);
+    drawAxes(data.start, data.end);
+    drawLine(data.series.ph, periods.ph.color);
+    drawLine(data.series.em, periods.em.color);
+    drawLine(data.series.intel, periods.intel.color);
+    if(els.showIntu.checked) drawLine(data.series.intu, periods.intu.color);
+    drawToday(target, data.start, data.end);
 
+    // punti critici
     const crits = [
-      ...findCriticals(xs, series.ph).map(d=>({d,color:periods.ph.color})),
-      ...findCriticals(xs, series.em).map(d=>({d,color:periods.em.color})),
-      ...findCriticals(xs, series.intel).map(d=>({d,color:periods.intel.color})),
-      ...(els.showIntu.checked ? findCriticals(xs, series.intu).map(d=>({d,color:periods.intu.color})) : [])
+      ...findCriticals(data.xs, data.series.ph).map(d=>({d,color:periods.ph.color})),
+      ...findCriticals(data.xs, data.series.em).map(d=>({d,color:periods.em.color})),
+      ...findCriticals(data.xs, data.series.intel).map(d=>({d,color:periods.intel.color})),
+      ...(els.showIntu.checked ? findCriticals(data.xs, data.series.intu).map(d=>({d,color:periods.intu.color})) : [])
     ];
-    const total = xs.length - 1;
+    const total = data.xs.length - 1;
     crits.forEach(({d,color})=>{
-      const i = daysBetween(start,d);
+      const i = daysBetween(data.start,d);
       const x = (i/total) * els.canvas.width;
       const y = mapY(0);
       ctx.fillStyle = color; ctx.strokeStyle = '#000'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
     });
 
-    // Tooltip minimale
-    els.canvas.onmousemove = (e)=>{
-      const rect = els.canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const idx = Math.round((x/els.canvas.width) * total);
-      const date = xs[Math.max(0, Math.min(total, idx))];
-      els.canvas.title = `Giorno: ${fmt(date)}`;
-    };
+    // legenda fissa iniziale = data di riferimento
+    const idx = Math.max(0, Math.min(lastData.total, daysBetween(lastData.start, target)));
+    updateFixedLegend(
+      lastData.xs[idx],
+      {
+        ph: lastData.series.ph[idx],
+        em: lastData.series.em[idx],
+        intel: lastData.series.intel[idx],
+        intu: lastData.series.intu[idx]
+      },
+      els.showIntu.checked
+    );
+
+    // se c'è un crossIndex attivo, ridisegniamo il marcatore sopra
+    if(crossIndex!=null){ drawCrosshair(crossIndex); }
   }
 
-  // ========= Eventi =========
-  els.draw.addEventListener('click', render);
+  // ========= Interazione: crosshair + legenda fissa aggiornata =========
+  function nearestIndexFromClientX(clientX){
+    if(!lastData) return null;
+    const rect = els.canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const i = Math.round((x/els.canvas.width) * lastData.total);
+    return Math.max(0, Math.min(lastData.total, i));
+  }
+
+  function updateInteractionAt(i){
+    if(!lastData) return;
+    crossIndex = i;
+    // ridisegna tutto (marcatore compreso)
+    render();
+    // aggiorna legenda sui valori correnti
+    updateFixedLegend(
+      lastData.xs[i],
+      {
+        ph: lastData.series.ph[i],
+        em: lastData.series.em[i],
+        intel: lastData.series.intel[i],
+        intu: lastData.series.intu[i]
+      },
+      els.showIntu.checked
+    );
+  }
+
+  function clearInteraction(){
+    crossIndex = null;
+    render();
+  }
+
+  // Mouse
+  els.canvas.addEventListener('mousemove', (e)=>{
+    const i = nearestIndexFromClientX(e.clientX);
+    if(i==null) return;
+    updateInteractionAt(i);
+  });
+  els.canvas.addEventListener('mouseleave', clearInteraction);
+
+  // Touch
+  els.canvas.addEventListener('touchstart', (e)=>{
+    const t = e.changedTouches[0];
+    const i = nearestIndexFromClientX(t.clientX);
+    if(i==null) return;
+    updateInteractionAt(i);
+  }, {passive:true});
+  els.canvas.addEventListener('touchmove', (e)=>{
+    const t = e.changedTouches[0];
+    const i = nearestIndexFromClientX(t.clientX);
+    if(i==null) return;
+    updateInteractionAt(i);
+  }, {passive:true});
+  els.canvas.addEventListener('touchend', clearInteraction);
+  els.canvas.addEventListener('touchcancel', clearInteraction);
+
+  // ========= Eventi base =========
+  els.draw.addEventListener('click', ()=>{ render(); });
   els.todayBtn.addEventListener('click', ()=>{ els.target.value = toISO(new Date()); render(); });
-  [els.dob, els.target, els.span, els.showIntu].forEach(el=> el.addEventListener('change', render));
+  [els.dob, els.target, els.span, els.showIntu].forEach(el=> el.addEventListener('change', ()=>{ render(); }));
 
   // Condivisione via URL
   els.shareBtn.addEventListener('click', ()=>{
@@ -363,7 +569,7 @@
   function fitCanvas(){
     const ratio = window.devicePixelRatio || 1;
     const w = Math.max(300, els.canvas.clientWidth);
-    const h = Math.max(240, els.canvas.clientHeight);
+    const h = Math.max(260, els.canvas.clientHeight);
     const W = Math.round(w*ratio), H = Math.round(h*ratio);
     if(els.canvas.width !== W || els.canvas.height !== H){
       els.canvas.width = W; els.canvas.height = H;
@@ -371,11 +577,11 @@
       render();
     }
   }
-  window.addEventListener('resize', fitCanvas);
+  window.addEventListener('resize', ()=>{ fitCanvas(); });
 
-  // Primo render se arrivano parametri via URL
+  // Primo render (ed eventuali parametri via URL)
   fitCanvas();
-  if(els.dob.value){ render(); }
+  if(els.dob.value){ render(); } else { clearCanvas(); drawAxes(new Date(), new Date()); }
 })();
 </script>
 </body>
