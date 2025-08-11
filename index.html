@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bioritmo – Calcolatore & Grafico</title>
+<style>
+  :root{
+    --bg:#0e0f13; --panel:#171923; --ink:#e7e8ee; --muted:#9aa0ac;
+    --grid:#2a2d3a; --accent:#6aa6ff; --ok:#4bd37b; --warn:#ffb04b; --bad:#ff6b6b;
+    --intu:#b67dff; --line:#3a3f52; --chip:#222538;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;
+    background:linear-gradient(180deg,#0b0c10,#12141b 25%,#0e0f13 100%); color:var(--ink);
+  }
+  header{
+    padding:24px 16px; text-align:center;
+  }
+  header h1{margin:0 0 6px; font-size:clamp(22px,3.5vw,28px); letter-spacing:.3px}
+  header p{margin:0; color:var(--muted); font-size:14px}
+  .wrap{max-width:1100px; margin:0 auto; padding:12px 16px 40px}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  .grid{
+    display:grid; gap:14px;
+    grid-template-columns:1fr;
+  }
+  @media (min-width:900px){
+    .grid{grid-template-columns: 380px 1fr;}
+  }
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  input[type="date"], input[type="number"], input[type="text"]{
+    width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#10121a; color:var(--ink);
+    outline:none;
+  }
+  input[type="checkbox"]{transform:translateY(1px)}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
+  button{
+    padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--chip); color:var(--ink); cursor:pointer;
+  }
+  button.primary{background:var(--accent); border-color:transparent; color:#0b1220; font-weight:600}
+  button:disabled{opacity:.6; cursor:not-allowed}
+  canvas{width:100%; height:360px; background:linear-gradient(180deg,#0f111a,#141724); border:1px solid var(--line); border-radius:12px}
+  .legend{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 0}
+  .chip{
+    display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:999px; background:var(--chip); border:1px solid var(--line); color:var(--ink); font-size:13px;
+  }
+  .dot{width:12px; height:12px; border-radius:50%}
+  .dot.ph{background:var(--ok)}
+  .dot.em{background:var(--warn)}
+  .dot.in{background:var(--bad)}
+  .dot.intu{background:var(--intu)}
+  .muted{color:var(--muted)}
+  .section-title{margin:14px 0 8px; font-size:14px; color:var(--muted); font-weight:600; letter-spacing:.3px}
+  .statgrid{display:grid; grid-template-columns: repeat(2,1fr); gap:8px}
+  @media (min-width:560px){ .statgrid{grid-template-columns: repeat(4,1fr);} }
+  .stat{
+    background:#10121a; border:1px solid var(--line); border-radius:12px; padding:10px;
+  }
+  .stat b{display:block; font-size:18px; margin-bottom:4px}
+  .stat small{color:var(--muted)}
+  .notice{margin-top:8px; font-size:12px; color:var(--muted)}
+  .divider{height:1px; background:var(--line); margin:12px 0}
+  footer{color:var(--muted); text-align:center; font-size:12px; padding:20px 0}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Calcolatore di Bioritmo</h1>
+    <p>Inserisci la tua <b>data di nascita</b>, scegli l’intervallo e visualizza i cicli fisico, emotivo, intellettuale (e intuizione).</p>
+  </header>
+
+  <div class="wrap">
+    <div class="card grid">
+      <!-- Pannello controlli -->
+      <section>
+        <div class="section-title">Dati</div>
+        <label for="name">Nome (opzionale)</label>
+        <input id="name" type="text" placeholder="Es. Giulia" />
+
+        <label for="dob" style="margin-top:10px">Data di nascita *</label>
+        <input id="dob" type="date" required />
+
+        <div class="row" style="margin-top:10px">
+          <div style="flex:1">
+            <label for="target">Data di riferimento</label>
+            <input id="target" type="date" />
+          </div>
+          <div>
+            <label for="span">Giorni intorno alla data</label>
+            <input id="span" type="number" min="7" max="120" step="1" value="30" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <label><input id="showIntu" type="checkbox" /> Includi ciclo <b>Intuizione</b> (38 gg)</label>
+        </div>
+
+        <div class="actions">
+          <button id="draw" class="primary">Disegna grafico</button>
+          <button id="todayBtn">Oggi</button>
+          <button id="shareBtn">Condividi</button>
+          <button id="saveBtn">Esporta PNG</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">Valori alla data selezionata</div>
+        <div class="statgrid" id="stats">
+          <div class="stat"><b id="statPh">—</b><small>Fisico (23 gg)</small></div>
+          <div class="stat"><b id="statEm">—</b><small>Emotivo (28 gg)</small></div>
+          <div class="stat"><b id="statIn">—</b><small>Intellettuale (33 gg)</small></div>
+          <div class="stat"><b id="statIntu">—</b><small>Intuizione (38 gg)</small></div>
+        </div>
+
+        <p class="notice">
+          Nota: i bioritmi sono un concetto popolare ma <i>non scientificamente dimostrato</i>. Usali come spunto ludico, non per decisioni importanti.
+        </p>
+      </section>
+
+      <!-- Pannello grafico -->
+      <section>
+        <canvas id="chart" width="1200" height="420" aria-label="Grafico bioritmo" role="img"></canvas>
+        <div class="legend" aria-hidden="true">
+          <span class="chip"><span class="dot ph"></span> Fisico</span>
+          <span class="chip"><span class="dot em"></span> Emotivo</span>
+          <span class="chip"><span class="dot in"></span> Intellettuale</span>
+          <span class="chip"><span class="dot intu"></span> Intuizione</span>
+          <span class="chip muted">Linea 0 = equilibrio</span>
+        </div>
+      </section>
+    </div>
+    <footer>© 2025 – Bioritmo demo locale (nessun dato inviato in rete)</footer>
+  </div>
+
+<script>
+(function(){
+  // ======= Utility di data =======
+  const $ = (sel)=>document.querySelector(sel);
+  const fmt = (d)=>d.toLocaleDateString('it-IT',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const parseISO = (s)=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+  const toISO = (d)=>{ const z=(n)=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
+
+  // ======= Stato =======
+  const periods = {
+    ph:{days:23, color:'#4bd37b', label:'Fisico'},
+    em:{days:28, color:'#ffb04b', label:'Emotivo'},
+    intel:{days:33, color:'#ff6b6b', label:'Intellettuale'},
+    intu:{days:38, color:'#b67dff', label:'Intuizione'}
+  };
+
+  const els = {
+    name: $('#name'),
+    dob: $('#dob'),
+    target: $('#target'),
+    span: $('#span'),
+    showIntu: $('#showIntu'),
+    draw: $('#draw'),
+    todayBtn: $('#todayBtn'),
+    shareBtn: $('#shareBtn'),
+    saveBtn: $('#saveBtn'),
+    statPh: $('#statPh'),
+    statEm: $('#statEm'),
+    statIn: $('#statIn'),
+    statIntu: $('#statIntu'),
+    canvas: $('#chart'),
+  };
+
+  // Default: target oggi, span 30
+  const today = new Date();
+  els.target.value = toISO(today);
+
+  // Leggi parametri da URL (condivisione)
+  const params = new URLSearchParams(location.search);
+  if(params.has('dob')) els.dob.value = params.get('dob');
+  if(params.has('t')) els.target.value = params.get('t');
+  if(params.has('span')) els.span.value = params.get('span');
+  if(params.has('intu')) els.showIntu.checked = params.get('intu') === '1';
+  if(params.has('name')) els.name.value = params.get('name');
+
+  // ======= Calcoli bioritmo =======
+  function daysBetween(a,b){
+    const ms = 24*3600*1000;
+    const da = new Date(a.getFullYear(),a.getMonth(),a.getDate());
+    const db = new Date(b.getFullYear(),b.getMonth(),b.getDate());
+    return Math.round((db - da)/ms);
+  }
+  function cycleValue(daysSinceBirth, period){
+    // sinusoide classica: -1..+1
+    const TWO_PI = Math.PI * 2;
+    return Math.sin(TWO_PI * (daysSinceBirth/period));
+  }
+  function percent(v){ return Math.round(v*100); }
+
+  function computeSeries(dob, centerDate, spanDays, includeIntu){
+    const start = new Date(centerDate); start.setDate(start.getDate() - spanDays);
+    const end = new Date(centerDate); end.setDate(end.getDate() + spanDays);
+    const daysTotal = daysBetween(start, end);
+    const xs = [];
+    const series = {ph:[], em:[], intel:[], intu:[]};
+    for(let i=0;i<=daysTotal;i++){
+      const d = new Date(start); d.setDate(start.getDate()+i);
+      const dsb = daysBetween(dob, d);
+      xs.push(d);
+      series.ph.push(cycleValue(dsb, periods.ph.days));
+      series.em.push(cycleValue(dsb, periods.em.days));
+      series.intel.push(cycleValue(dsb, periods.intel.days));
+      if(includeIntu) series.intu.push(cycleValue(dsb, periods.intu.days));
+      else series.intu.push(null);
+    }
+    return {xs, series, start, end};
+  }
+
+  // ======= Rendering Canvas =======
+  const ctx = els.canvas.getContext('2d');
+  function clearCanvas(){
+    const {width, height} = els.canvas;
+    ctx.clearRect(0,0,width,height);
+    // sfondo a quadretti
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    for(let y=0;y<height;y+=20){ ctx.fillRect(0,y,width,1); }
+    for(let x=0;x<width;x+=40){ ctx.fillRect(x,0,1,height); }
+  }
+
+  function drawAxes(dateStart, dateEnd){
+    const {width, height} = els.canvas;
+    // asse orizzontale 0
+    const mid = height/2;
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(width, mid); ctx.stroke();
+
+    // tacche verticali ogni 5 giorni
+    const totalDays = daysBetween(dateStart, dateEnd);
+    for(let i=0;i<=totalDays;i++){
+      if(i % 5 === 0){
+        const x = (i/totalDays) * width;
+        ctx.globalAlpha = 0.2;
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,height); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // etichette date ai bordi
+    ctx.fillStyle = '#9aa0ac'; ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto';
+    ctx.fillText(fmt(dateStart), 8, 16);
+    const text = fmt(dateEnd);
+    const tw = ctx.measureText(text).width;
+    ctx.fillText(text, width - tw - 8, 16);
+  }
+
+  function mapY(v){ // v -1..+1 -> y
+    const {height} = els.canvas;
+    const padding = 24;
+    return (height - padding) - ((v + 1)/2) * (height - padding*2);
+  }
+
+  function drawLine(values, color){
+    const {width} = els.canvas;
+    const n = values.length - 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    values.forEach((v,i)=>{
+      if(v === null) return;
+      const x = (i/n) * width;
+      const y = mapY(v);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+
+  function drawToday(centerDate, start, end){
+    // linea verticale al giorno di riferimento
+    const total = daysBetween(start,end);
+    const i = daysBetween(start, centerDate);
+    const x = (i/total) * els.canvas.width;
+    ctx.strokeStyle = '#6aa6ff'; ctx.setLineDash([4,4]); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,els.canvas.height); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function findCriticals(xs, arr){
+    // giorni in cui il segno cambia (zero crossing tra giorni consecutivi)
+    const out = [];
+    for(let i=1;i<arr.length;i++){
+      if(arr[i-1]===null || arr[i]===null) continue;
+      if((arr[i-1] <= 0 && arr[i] > 0) || (arr[i-1] >= 0 && arr[i] < 0)){
+        out.push(xs[i]);
+      }
+    }
+    return out;
+  }
+
+  function updateStats(dob, target, includeIntu){
+    const dsb = daysBetween(dob, target);
+    const vPh = cycleValue(dsb, periods.ph.days);
+    const vEm = cycleValue(dsb, periods.em.days);
+    const vIn = cycleValue(dsb, periods.intel.days);
+    const vIntu = includeIntu ? cycleValue(dsb, periods.intu.days) : null;
+
+    els.statPh.textContent = percent(vPh) + '%';
+    els.statEm.textContent = percent(vEm) + '%';
+    els.statIn.textContent = percent(vIn) + '%';
+    els.statIntu.textContent = vIntu===null ? '—' : percent(vIntu) + '%';
+  }
+
+  function render(){
+    if(!els.dob.value){ alert('Inserisci la data di nascita.'); return; }
+    if(!els.target.value){ els.target.value = toISO(new Date()); }
+    const dob = parseISO(els.dob.value);
+    const target = parseISO(els.target.value);
+    const span = Math.max(7, Math.min(120, Number(els.span.value)||30));
+    els.span.value = span;
+
+    updateStats(dob, target, els.showIntu.checked);
+
+    const {xs, series, start, end} = computeSeries(dob, target, span, els.showIntu.checked);
+
+    // Disegno
+    clearCanvas();
+    drawAxes(start, end);
+    drawLine(series.ph, periods.ph.color);
+    drawLine(series.em, periods.em.color);
+    drawLine(series.intel, periods.intel.color);
+    if(els.showIntu.checked) drawLine(series.intu, periods.intu.color);
+    drawToday(target, start, end);
+
+    // Punti critici: segnaliamoli con piccoli marker
+    const crits = [
+      ...findCriticals(xs, series.ph).map(d=>({d,color:periods.ph.color,label:'Fisico'})),
+      ...findCriticals(xs, series.em).map(d=>({d,color:periods.em.color,label:'Emotivo'})),
+      ...findCriticals(xs, series.intel).map(d=>({d,color:periods.intel.color,label:'Intellettuale'})),
+      ...(els.showIntu.checked ? findCriticals(xs, series.intu).map(d=>({d,color:periods.intu.color,label:'Intuizione'})) : [])
+    ];
+    const total = xs.length - 1;
+    crits.forEach(({d,color})=>{
+      const i = daysBetween(start,d);
+      const x = (i/total) * els.canvas.width;
+      const y = mapY(0);
+      ctx.fillStyle = color; ctx.strokeStyle = '#000'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+    });
+
+    // Tooltip semplice al passaggio
+    els.canvas.onmousemove = (e)=>{
+      const rect = els.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const idx = Math.round((x/els.canvas.width) * total);
+      const date = xs[Math.max(0, Math.min(total, idx))];
+      els.canvas.title = `Giorno: ${fmt(date)}`;
+    };
+  }
+
+  // ======= Eventi =======
+  els.draw.addEventListener('click', render);
+  els.todayBtn.addEventListener('click', ()=>{
+    els.target.value = toISO(new Date());
+    render();
+  });
+  [els.dob, els.target, els.span, els.showIntu].forEach(el=>{
+    el.addEventListener('change', render);
+  });
+
+  // Condivisione via URL
+  els.shareBtn.addEventListener('click', ()=>{
+    if(!els.dob.value){ alert('Inserisci la data di nascita.'); return; }
+    const p = new URLSearchParams();
+    p.set('dob', els.dob.value);
+    if(els.target.value) p.set('t', els.target.value);
+    p.set('span', els.span.value);
+    if(els.showIntu.checked) p.set('intu', '1');
+    if(els.name.value) p.set('name', els.name.value);
+    const url = location.origin + location.pathname + '?' + p.toString();
+    navigator.clipboard?.writeText(url);
+    alert('Link copiato negli appunti:\n' + url);
+  });
+
+  // Salvataggio PNG
+  els.saveBtn.addEventListener('click', ()=>{
+    const a = document.createElement('a');
+    const name = els.name.value ? `_${els.name.value}` : '';
+    a.download = `bioritmo${name || ''}_${els.target.value || toISO(new Date())}.png`;
+    a.href = els.canvas.toDataURL('image/png');
+    a.click();
+  });
+
+  // Ridisegno al resize per nitidezza
+  function fitCanvas(){
+    const ratio = window.devicePixelRatio || 1;
+    const w = els.canvas.clientWidth;
+    const h = els.canvas.clientHeight;
+    if(els.canvas.width !== Math.round(w*ratio) || els.canvas.height !== Math.round(h*ratio)){
+      els.canvas.width = Math.round(w*ratio);
+      els.canvas.height = Math.round(h*ratio);
+      ctx.setTransform(ratio,0,0,ratio,0,0); // mantieni spessori coerenti
+      render();
+    }
+  }
+  window.addEventListener('resize', fitCanvas);
+
+  // Primo render se ci sono dati nell’URL
+  if(els.dob.value){ render(); }
+})();
+</script>
+</body>
+</html>
