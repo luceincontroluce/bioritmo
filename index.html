@@ -3,620 +3,422 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bioritmo – Calcolatore & Grafico</title>
-<meta name="description" content="Calcola e visualizza i bioritmi (Fisico, Emotivo, Intellettuale, Intuizione) a partire dalla tua data di nascita. App 100% locale, nessun dato inviato." />
+<title>Bioritmo – Calcolatore Responsive</title>
 <style>
   :root{
-    --bg:#0e0f13; --panel:#171923; --ink:#e7e8ee; --muted:#9aa0ac;
-    --grid:#2a2d3a; --accent:#6aa6ff; --ok:#4bd37b; --warn:#ffb04b; --bad:#ff6b6b;
-    --intu:#b67dff; --line:#3a3f52; --chip:#222538;
+    --bg:#0f1115; --panel:#171a21; --ink:#e7eaf0; --muted:#9aa3b2; --grid:#2a2f3a;
+    --p:#4da3ff; --e:#ff6b88; --i:#55d69e; --zero:#c7cbd4;
+    --accent:#ffd166; --focus:#7ab8ff33;
+    --radius:14px; --gap:12px; --shadow:0 6px 20px rgba(0,0,0,.35);
+    font-synthesis-weight:none; /* testo più nitido */
   }
-  *{box-sizing:border-box}
   html,body{height:100%}
   body{
-    margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;
-    background:linear-gradient(180deg,#0b0c10,#12141b 25%,#0e0f13 100%); color:var(--ink);
+    margin:0; background:linear-gradient(180deg,#0e1014, #0b0d11 120%);
+    color:var(--ink); font:500 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    display:grid; place-items:stretch;
   }
-  header{padding:24px 16px; text-align:center}
-  header h1{margin:0 0 6px; font-size:clamp(22px,3.5vw,28px); letter-spacing:.3px}
-  header p{margin:0; color:var(--muted); font-size:14px}
-  .wrap{max-width:1100px; margin:0 auto; padding:12px 16px 40px}
-  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
-  .grid{display:grid; gap:14px; grid-template-columns:1fr}
-  @media (min-width:900px){ .grid{grid-template-columns: 380px 1fr;} }
-  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
-  input[type="date"], input[type="number"], input[type="text"]{
-    width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#10121a; color:var(--ink); outline:none;
+  .wrap{
+    max-width:1100px; margin:auto; padding:20px; width:100%; box-sizing:border-box;
+    display:grid; gap:var(--gap);
   }
-  input[type="checkbox"]{transform:translateY(1px)}
-  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-  .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
-  button{padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--chip); color:var(--ink); cursor:pointer}
-  button.primary{background:var(--accent); border-color:transparent; color:#0b1220; font-weight:600}
-  button:disabled{opacity:.6; cursor:not-allowed}
-  canvas{width:100%; height:360px; background:linear-gradient(180deg,#0f111a,#141724); border:1px solid var(--line); border-radius:12px}
+  header{
+    display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; justify-content:space-between;
+  }
+  header h1{font-size:clamp(18px,2.5vw,22px); margin:0; letter-spacing:.2px}
+  .panel{
+    background:var(--panel); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid #222838;
+  }
+  .controls{
+    display:grid; grid-template-columns:1fr; gap:var(--gap); padding:14px; }
+  .row{ display:grid; gap:10px; grid-template-columns: 1fr 1fr; }
+  .row > * { min-width:0; }
+  .row-3{ grid-template-columns: 1fr 1fr 1fr; }
+  label{ font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+  input, select, button{
+    width:100%; box-sizing:border-box; background:#0f131b; color:var(--ink);
+    border:1px solid #2a3040; border-radius:10px; padding:10px 12px; outline:none;
+  }
+  input:focus, select:focus, button:focus { box-shadow:0 0 0 4px var(--focus); border-color:#3b82f6; }
+  button{ cursor:pointer; background:#1a2130; transition:.2s background, .2s transform; }
+  button:hover{ background:#20293b; }
+  button:active{ transform:translateY(1px); }
 
-  .legend{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 0}
-  .chip{display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:999px; background:var(--chip); border:1px solid var(--line); color:var(--ink); font-size:13px}
-  .dot{width:12px; height:12px; border-radius:50%}
-  .dot.ph{background:var(--ok)} .dot.em{background:var(--warn)} .dot.in{background:var(--bad)} .dot.intu{background:var(--intu)}
-  .muted{color:var(--muted)}
-  .section-title{margin:14px 0 8px; font-size:14px; color:var(--muted); font-weight:600; letter-spacing:.3px}
-  .statgrid{display:grid; grid-template-columns: repeat(2,1fr); gap:8px}
-  @media (min-width:560px){ .statgrid{grid-template-columns: repeat(4,1fr);} }
-  .stat{background:#10121a; border:1px solid var(--line); border-radius:12px; padding:10px}
-  .stat b{display:block; font-size:18px; margin-bottom:4px}
-  .stat small{color:var(--muted)}
-  .notice{margin-top:8px; font-size:12px; color:var(--muted)}
-  .divider{height:1px; background:var(--line); margin:12px 0}
-  footer{color:var(--muted); text-align:center; font-size:12px; padding:20px 0}
-
-  /* Legenda fissa nel riquadro del grafico */
-  .fixed-legend{
-    position:absolute; left:10px; bottom:10px; z-index:2;
-    background:rgba(20,22,34,.9); border:1px solid var(--line);
-    border-radius:10px; padding:8px 10px; min-width:210px;
-    font-size:12px; color:var(--ink); box-shadow:0 6px 20px rgba(0,0,0,.35);
+  .chart-card{ padding:10px; display:grid; gap:8px; }
+  .legend{
+    display:flex; flex-wrap:wrap; gap:10px; padding:0 6px 6px; align-items:center; justify-content:flex-start;
   }
-  .fixed-legend .title{font-weight:600; margin-bottom:6px}
-  .fixed-legend .row{
-    display:grid; grid-template-columns:12px 1fr auto; gap:6px 8px; align-items:center;
+  .chip{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid #2a3040; border-radius:999px; font-size:13px; color:#cfd6e4; }
+  .dot{ width:14px; height:6px; border-radius:3px; display:inline-block; }
+  .p{ background:var(--p); } .e{ background:var(--e);} .i{ background:var(--i);}
+  .canvas{
+    position:relative; width:100%; aspect-ratio: 16/10;
+    background:linear-gradient(180deg,#101520,#0f141f);
+    border:1px solid #1e2431; border-radius:12px; overflow:hidden;
   }
-  .fixed-legend .sw{width:10px; height:10px; border-radius:50%}
-  .fixed-legend .val{font-weight:700}
+  svg{ width:100%; height:100%; display:block; }
 
-  @media (max-width: 420px){
-    .fixed-legend{
-      bottom: 18px;
-      font-size: 11px;
-      min-width: 190px;
-    }
+  /* Tooltip */
+  .tip{
+    position:absolute; pointer-events:none; background:#0b0f17; color:#e8ecf6; border:1px solid #263049;
+    padding:8px 10px; font-size:13px; border-radius:10px; box-shadow:var(--shadow); max-width:min(280px,88vw);
+    transform:translate(-50%,-110%); white-space:nowrap;
+  }
+  .tip ul{ list-style:none; margin:6px 0 0; padding:0; display:grid; gap:2px;}
+  .tip .t-date{ font-size:12px; color:var(--muted); }
+  .tip .rowv{ display:flex; align-items:center; gap:8px; }
+  .tip .val{ font-variant-numeric:tabular-nums; }
+
+  /* Cursor line */
+  .cursor{ stroke:var(--accent); stroke-width:1.2; stroke-dasharray:5 4; opacity:.8; }
+
+  /* Footer/help */
+  .help { color:var(--muted); font-size:13px; padding:10px 14px 14px; }
+  .grid-note{ color:#a7b0c0; }
+
+  /* Mobile optimizations */
+  @media (max-width: 720px){
+    .row{ grid-template-columns:1fr; }
+    .legend{ gap:6px; }
+    .chip{ font-size:12px; padding:6px 8px; }
+    .canvas{ aspect-ratio: 4/3; }
   }
 </style>
 </head>
 <body>
-  <header>
-    <h1>Calcolatore di Bioritmo</h1>
-    <p>Inserisci la tua <b>data di nascita</b>, scegli l’intervallo e visualizza i cicli fisico, emotivo, intellettuale (e intuizione).</p>
-  </header>
-
   <div class="wrap">
-    <div class="card grid">
-      <!-- Controlli -->
-      <section>
-        <div class="section-title">Dati</div>
+    <header>
+      <h1>Calcolatore di Bioritmo</h1>
+    </header>
 
-        <label for="name">Nome (opzionale)</label>
-        <input id="name" type="text" placeholder="Es. Giulia" />
-
-        <label for="dob" style="margin-top:10px">Data di nascita *</label>
-        <input id="dob" type="date" required />
-
-        <div class="row" style="margin-top:10px">
-          <div style="flex:1">
-            <label for="target">Data di riferimento</label>
-            <input id="target" type="date" />
-          </div>
-          <div>
-            <label for="span">Giorni intorno alla data</label>
-            <input id="span" type="number" min="7" max="120" step="1" value="30" />
-          </div>
+    <section class="panel controls" aria-label="Impostazioni bioritmo">
+      <div class="row">
+        <div>
+          <label for="birth">Data di nascita</label>
+          <input id="birth" type="date" aria-describedby="birthHelp" />
         </div>
-
-        <div class="row" style="margin-top:8px">
-          <label><input id="showIntu" type="checkbox" /> Includi ciclo <b>Intuizione</b> (38 gg)</label>
+        <div>
+          <label for="center">Data di riferimento</label>
+          <input id="center" type="date" />
         </div>
-
-        <div class="actions">
-          <button id="draw" class="primary">Disegna grafico</button>
-          <button id="todayBtn">Oggi</button>
-          <button id="shareBtn">Condividi</button>
-          <button id="saveBtn">Esporta PNG</button>
+      </div>
+      <div class="row-3">
+        <div>
+          <label for="range">Intervallo (giorni totali)</label>
+          <select id="range">
+            <option value="15">15</option>
+            <option value="30" selected>30</option>
+            <option value="60">60</option>
+            <option value="90">90</option>
+          </select>
         </div>
-
-        <div class="divider"></div>
-
-        <div class="section-title">Valori alla data selezionata</div>
-        <div class="statgrid" id="stats">
-          <div class="stat"><b id="statPh">—</b><small>Fisico (23 gg)</small></div>
-          <div class="stat"><b id="statEm">—</b><small>Emotivo (28 gg)</small></div>
-          <div class="stat"><b id="statIn">—</b><small>Intellettuale (33 gg)</small></div>
-          <div class="stat"><b id="statIntu">—</b><small>Intuizione (38 gg)</small></div>
+        <div>
+          <label for="gran">Granularità</label>
+          <select id="gran">
+            <option value="1" selected>Giorni</option>
+            <option value="0.5">½ giorno</option>
+          </select>
         </div>
-
-        <p class="notice">
-          Nota: i bioritmi sono un concetto popolare ma <i>non scientificamente dimostrato</i>. Usali come spunto ludico, non per decisioni importanti.
-        </p>
-      </section>
-
-      <!-- Grafico -->
-      <section>
-        <div id="canvasWrap" style="position:relative">
-          <canvas id="chart" width="1200" height="420" aria-label="Grafico bioritmo" role="img"></canvas>
-
-          <!-- Legenda fissa -->
-          <div class="fixed-legend" id="fixedLegend">
-            <div class="title" id="legendDate">—</div>
-            <div class="row">
-              <span class="sw" style="background:var(--ok)"></span>
-              <span>Fisico</span>
-              <span class="val" id="vPh">—</span>
-            </div>
-            <div class="row">
-              <span class="sw" style="background:var(--warn)"></span>
-              <span>Emotivo</span>
-              <span class="val" id="vEm">—</span>
-            </div>
-            <div class="row">
-              <span class="sw" style="background:var(--bad)"></span>
-              <span>Intellettuale</span>
-              <span class="val" id="vIn">—</span>
-            </div>
-            <div class="row" id="rowIntu" style="display:none">
-              <span class="sw" style="background:var(--intu)"></span>
-              <span>Intuizione</span>
-              <span class="val" id="vIntu">—</span>
-            </div>
-          </div>
+        <div>
+          <label>&nbsp;</label>
+          <button id="today">Vai a oggi</button>
         </div>
+      </div>
+    </section>
 
-        <div class="legend" aria-hidden="true">
-          <span class="chip"><span class="dot ph"></span> Fisico</span>
-          <span class="chip"><span class="dot em"></span> Emotivo</span>
-          <span class="chip"><span class="dot in"></span> Intellettuale</span>
-          <span class="chip"><span class="dot intu"></span> Intuizione</span>
-          <span class="chip muted">Linea 0 = equilibrio</span>
-        </div>
-      </section>
-    </div>
-    <footer>© 2025 – Bioritmo demo locale (nessun dato inviato in rete)</footer>
+    <section class="panel chart-card" aria-label="Grafico bioritmo">
+      <div class="legend" role="list" aria-label="Legenda">
+        <span class="chip" role="listitem"><span class="dot p" aria-hidden="true"></span> Fisico (23g)</span>
+        <span class="chip" role="listitem"><span class="dot e" aria-hidden="true"></span> Emotivo (28g)</span>
+        <span class="chip" role="listitem"><span class="dot i" aria-hidden="true"></span> Intellettuale (33g)</span>
+        <span class="chip grid-note" role="listitem">Linea 0% = equilibrio</span>
+      </div>
+
+      <div class="canvas" id="canvas" aria-label="Area grafico">
+        <svg id="svg" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
+          <title id="title">Grafico dei bioritmi</title>
+          <desc id="desc">Curve dei cicli Fisico, Emotivo e Intellettuale su intervallo selezionato. Scala da -100% a +100% con linea dello zero.</desc>
+          <!-- Griglia e assi verranno inseriti via JS -->
+        </svg>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+
+      <div class="help">
+        Suggerimento: tocca o muovi il mouse sul grafico per leggere i valori esatti nel giorno selezionato. I tooltip vengono unificati
+        per evitare sovrapposizioni e migliorare la leggibilità.
+      </div>
+    </section>
   </div>
 
 <script>
-"use strict";
 (function(){
-  // ========= Utility =========
-  const $ = (sel)=>document.querySelector(sel);
-  const fmt = (d)=>d.toLocaleDateString('it-IT',{year:'numeric',month:'2-digit',day:'2-digit'});
-  const parseISO = (s)=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
-  const toISO = (d)=>{ const z=(n)=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
+  // ---------- Utilità date/numero ----------
+  const MS_DAY = 86400000;
+  const clamp = (v,min,max)=>Math.min(max,Math.max(min,v));
+  const fmtPct = v => (v*100).toFixed(0) + '%';
+  const toISODate = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const parseDate = s => { const d = new Date(s); if(Number.isNaN(d)) return null; return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+  const daysBetween = (d1,d2)=> Math.floor((d2 - d1)/MS_DAY);
 
-  // ========= Stato & costanti =========
-  const periods = {
-    ph:{days:23, color:'#4bd37b', label:'Fisico'},
-    em:{days:28, color:'#ffb04b', label:'Emotivo'},
-    intel:{days:33, color:'#ff6b6b', label:'Intellettuale'},
-    intu:{days:38, color:'#b67dff', label:'Intuizione'}
+  // ---------- Stato ----------
+  const state = {
+    birth: null,
+    center: null,
+    totalDays: 30,
+    step: 1, // giorni
+    width: 1000, height: 650,
+    padding: {l:60, r:20, t:20, b:50},
+    cycles: [
+      { key:'p', name:'Fisico', period:23, color:'var(--p)' },
+      { key:'e', name:'Emotivo', period:28, color:'var(--e)' },
+      { key:'i', name:'Intellettuale', period:33, color:'var(--i)' },
+    ]
   };
 
-  const els = {
-    name: $('#name'),
-    dob: $('#dob'),
-    target: $('#target'),
-    span: $('#span'),
-    showIntu: $('#showIntu'),
-    draw: $('#draw'),
-    todayBtn: $('#todayBtn'),
-    shareBtn: $('#shareBtn'),
-    saveBtn: $('#saveBtn'),
-    statPh: $('#statPh'),
-    statEm: $('#statEm'),
-    statIn: $('#statIn'),
-    statIntu: $('#statIntu'),
-    canvas: $('#chart'),
-    wrap: $('#canvasWrap'),
-    legendBox: $('#fixedLegend'),
-    legendDate: $('#legendDate'),
-    vPh: $('#vPh'), vEm: $('#vEm'), vIn: $('#vIn'), vIntu: $('#vIntu'),
-    rowIntu: $('#rowIntu')
-  };
-  const ctx = els.canvas.getContext('2d');
+  // ---------- DOM ----------
+  const birthEl = document.getElementById('birth');
+  const centerEl = document.getElementById('center');
+  const rangeEl = document.getElementById('range');
+  const granEl = document.getElementById('gran');
+  const todayBtn = document.getElementById('today');
+  const svg = document.getElementById('svg');
+  const tip = document.getElementById('tip');
+  const canvas = document.getElementById('canvas');
 
-  // Padding interno del riquadro disegnabile
-  const PAD = { top: 28, right: 12, bottom: 42, left: 46 };
-
-  // Default: oggi
+  // Default valori
   const today = new Date();
-  els.target.value = toISO(today);
+  centerEl.value = toISODate(today);
+  state.center = parseDate(centerEl.value);
 
-  // Parametri da URL (per condivisione)
-  const params = new URLSearchParams(location.search);
-  if(params.has('dob')) els.dob.value = params.get('dob');
-  if(params.has('t')) els.target.value = params.get('t');
-  if(params.has('span')) els.span.value = params.get('span');
-  if(params.has('intu')) els.showIntu.checked = params.get('intu') === '1';
-  if(params.has('name')) els.name.value = params.get('name');
+  // Prova a impostare una data di nascita plausibile (30 anni fa)
+  const dfltBirth = new Date(today.getFullYear()-30, today.getMonth(), today.getDate());
+  birthEl.value = toISODate(dfltBirth);
+  state.birth = parseDate(birthEl.value);
 
-  // ========= Calcoli bioritmo =========
-  function daysBetween(a,b){
-    const ms = 86400000;
-    const da = new Date(a.getFullYear(),a.getMonth(),a.getDate());
-    const db = new Date(b.getFullYear(),b.getMonth(),b.getDate());
-    return Math.round((db - da)/ms);
+  // ---------- Eventi ----------
+  birthEl.addEventListener('change', ()=>{ state.birth = parseDate(birthEl.value); draw(); });
+  centerEl.addEventListener('change', ()=>{ state.center = parseDate(centerEl.value); draw(); });
+  rangeEl.addEventListener('change', ()=>{ state.totalDays = +rangeEl.value; draw(); });
+  granEl.addEventListener('change', ()=>{ state.step = +granEl.value; draw(); });
+  todayBtn.addEventListener('click', ()=>{ centerEl.value = toISODate(new Date()); state.center = parseDate(centerEl.value); draw(); });
+
+  // Ridisegna al resize mantenendo rapporto
+  new ResizeObserver(()=> draw()).observe(canvas);
+
+  // ---------- Calcolo bioritmi ----------
+  function bioValue(daysSinceBirth, period){
+    return Math.sin(2*Math.PI * (daysSinceBirth/period)); // -1..+1
   }
-  function cycleValue(daysSinceBirth, period){
-    const TWO_PI = Math.PI * 2;
-    return Math.sin(TWO_PI * (daysSinceBirth/period));
-  }
-  const percent = (v)=>Math.round(v*100);
+  function genData(){
+    const {birth, center, totalDays, step} = state;
+    if(!birth || !center) return [];
 
-  function computeSeries(dob, centerDate, spanDays, includeIntu){
-    const start = new Date(centerDate); start.setDate(start.getDate() - spanDays);
-    const end = new Date(centerDate); end.setDate(end.getDate() + spanDays);
-    const daysTotal = daysBetween(start, end);
-    const xs = [];
-    const series = {ph:[], em:[], intel:[], intu:[]};
-    for(let i=0;i<=daysTotal;i++){
-      const d = new Date(start); d.setDate(start.getDate()+i);
-      const dsb = daysBetween(dob, d);
-      xs.push(d);
-      series.ph.push(cycleValue(dsb, periods.ph.days));
-      series.em.push(cycleValue(dsb, periods.em.days));
-      series.intel.push(cycleValue(dsb, periods.intel.days));
-      series.intu.push(includeIntu ? cycleValue(dsb, periods.intu.days) : null);
+    const half = Math.floor(totalDays/2);
+    const start = new Date(center.getTime() - half*MS_DAY);
+    const points = [];
+    for(let i=0; i<=totalDays/step; i++){
+      const t = new Date(start.getTime() + i*step*MS_DAY);
+      const days = daysBetween(birth, t);
+      const entry = { t, x:i*step };
+      state.cycles.forEach(cy => entry[cy.key] = bioValue(days, cy.period));
+      points.push(entry);
     }
-    return {xs, series, start, end};
+    return points;
   }
 
-  // ========= Mapping coordinate =========
-  function mapY(v){ // v -1..+1 -> y in pixel
-    const h = els.canvas.height;
-    const drawable = h - PAD.top - PAD.bottom;
-    return PAD.top + (1 - ((v + 1)/2)) * drawable;
+  // ---------- Rendering ----------
+  function clearSVG(){
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
   }
-  function mapX(i, total){ // indice giorno -> x in pixel
-    const w = els.canvas.width;
-    const drawable = w - PAD.left - PAD.right;
-    return PAD.left + (i/total) * drawable;
-  }
+  function drawGrid(xScale, yScale, data){
+    const g = el('g', { 'aria-hidden':'true' });
+    // area disegno
+    const {l,r,t,b} = state.padding;
+    const W = state.width, H = state.height;
+    const plotW = W - l - r, plotH = H - t - b;
 
-  // ========= Rendering Canvas =========
-  let lastData = null; // {xs, series, start, end, total}
-  let crossIndex = null; // indice attivo per il marcatore verticale
+    // sfondo
+    g.appendChild(rect(l,t,plotW,plotH,{ fill:'url(#bgGrad)' }));
 
-  function clearCanvas(){
-    const {width, height} = els.canvas;
-    ctx.clearRect(0,0,width,height);
-    // griglia leggera nel riquadro disegnabile
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    const stepY = 20, stepX = 40;
-    for(let y = PAD.top; y < height - PAD.bottom; y += stepY){
-      ctx.fillRect(PAD.left, y, width - PAD.left - PAD.right, 1);
-    }
-    for(let x = PAD.left; x < width - PAD.right; x += stepX){
-      ctx.fillRect(x, PAD.top, 1, height - PAD.top - PAD.bottom);
-    }
-  }
+    // linee orizzontali (-100, -50, 0, +50, +100)
+    [-1,-0.5,0,0.5,1].forEach(v=>{
+      const y = yScale(v);
+      const isZero = Math.abs(v) < 1e-9;
+      g.appendChild(line(l,y,W-r,y,{ stroke: isZero? 'var(--zero)':'var(--grid)', 'stroke-width': isZero? 1.4:1, 'stroke-dasharray': isZero? '': '4 6', opacity: isZero? .9:.8 }));
+      const label = (v*100).toFixed(0)+'%';
+      g.appendChild(text(l-10, y+4, label, { 'text-anchor':'end', fill:isZero? 'var(--zero)':'#9aa3b2', 'font-size':12 }));
+    });
 
-  function drawAxes(dateStart, dateEnd){
-    const {width, height} = els.canvas;
-
-    // asse Y=0
-    const mid = mapY(0);
-    ctx.strokeStyle = '#2a2d3a';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(PAD.left, mid); ctx.lineTo(width - PAD.right, mid); ctx.stroke();
-
-    // tacche verticali leggere ogni 5 giorni
-    const totalDays = Math.max(1, daysBetween(dateStart, dateEnd));
-    for(let i=0;i<=totalDays;i++){
-      if(i % 5 === 0){
-        const x = mapX(i, totalDays);
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, height - PAD.bottom); ctx.stroke();
-        ctx.globalAlpha = 1;
+    // linee verticali (una ogni 5 giorni circa)
+    const approx = Math.max(5, Math.round(data.length/6));
+    for(let i=0;i<data.length;i+=approx){
+      const x = xScale(i*state.step);
+      g.appendChild(line(x,t,x,H-b,{ stroke:'var(--grid)', 'stroke-width':1, 'stroke-dasharray':'4 6', opacity:.7 }));
+      const d = data[i]?.t;
+      if(d){
+        g.appendChild(text(x, H-b+18, fmtDate(d), { 'text-anchor':'middle', fill:'#9aa3b2', 'font-size':12 }));
       }
     }
 
-    // etichette date agli estremi (in alto, dentro il padding)
-    ctx.fillStyle = '#9aa0ac';
-    ctx.font = (window.innerWidth < 480 ? '13px' : '12px') + ' system-ui, -apple-system, Segoe UI, Roboto';
-    ctx.textAlign = 'left';
-    ctx.fillText(fmt(dateStart), PAD.left + 4, PAD.top - 8 + 22);
-    const text = fmt(dateEnd);
-    const tw = ctx.measureText(text).width;
-    ctx.textAlign = 'right';
-    ctx.fillText(text, width - PAD.right - 4, PAD.top - 8 + 22);
+    // assi
+    g.appendChild(line(l,t,l,H-b,{ stroke:'#2a3040', 'stroke-width':1.3 }));
+    g.appendChild(line(l,H-b,W-r,H-b,{ stroke:'#2a3040', 'stroke-width':1.3 }));
 
-    drawYAxisLabels();
-    drawXAxisLabels(dateStart, dateEnd, 7);
+    svg.appendChild(g);
   }
 
-  // Y labels: +100, +50, 0, -50, -100
-  function drawYAxisLabels(){
-    const ticks = [1, 0.5, 0, -0.5, -1];
-    const {width} = els.canvas;
-
-    ctx.save();
-    ctx.font = (window.innerWidth < 480 ? '14px' : '12px') + ' system-ui, -apple-system, Segoe UI, Roboto';
-    ctx.fillStyle = '#9aa0ac';
-    ctx.strokeStyle = '#2a2d3a';
-    ctx.lineWidth = 1;
-
-    ticks.forEach(t=>{
-      const y = mapY(t);
-      // linea guida dentro ai paddings
-      ctx.globalAlpha = t===0 ? 1 : 0.25;
-      ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(width - PAD.right, y); ctx.stroke();
-
-      // testo a sinistra (dentro il padding)
-      ctx.globalAlpha = 1;
-      const label = (t*100>0?'+':'') + Math.round(t*100);
-      ctx.textAlign = 'left';
-      ctx.fillText(label, 8, y - 4);
+  function drawCurves(xScale, yScale, data){
+    const g = el('g', { fill:'none' });
+    state.cycles.forEach(cy=>{
+      const d = pathD(data.map((p,idx)=>[ xScale(p.x), yScale(p[cy.key]) ]));
+      g.appendChild(el('path', { d, stroke: `var(--${cy.key})`, 'stroke-width':2.2, 'vector-effect':'non-scaling-stroke' }));
     });
-    ctx.restore();
+    svg.appendChild(g);
   }
 
-  // X labels ogni "stepDays" giorni
-  function drawXAxisLabels(dateStart, dateEnd, stepDays){
-    const totalDays = Math.max(1, daysBetween(dateStart, dateEnd));
-    const {height} = els.canvas;
-    const step = Math.max(1, stepDays|0);
+  function drawCursor(xScale, yScale, data){
+    const g = el('g', { id:'cursorLayer' });
+    const {l,r,t,b} = state.padding;
+    const H = state.height, W = state.width;
+    const plotW = W - l - r;
 
-    ctx.save();
-    ctx.fillStyle = '#9aa0ac';
-    ctx.strokeStyle = '#2a2d3a';
-    ctx.font = (window.innerWidth < 480 ? '12px' : '11px') + ' system-ui, -apple-system, Segoe UI, Roboto';
-    ctx.textAlign = 'center';
+    // linea cursore
+    const cursorLine = line(l, t, l, H-b, { class:'cursor' });
+    g.appendChild(cursorLine);
+    svg.appendChild(g);
 
-    for(let i=0;i<=totalDays;i+=step){
-      const x = mapX(i, totalDays);
-      // piccola tacca
-      ctx.globalAlpha = .6;
-      ctx.beginPath(); ctx.moveTo(x, height - PAD.bottom + 4); ctx.lineTo(x, height - PAD.bottom + 12); ctx.stroke();
-      ctx.globalAlpha = 1;
-
-      const d = new Date(dateStart); d.setDate(dateStart.getDate()+i);
-      const lab = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
-      ctx.fillText(lab, x, height - 6); // più in su del bordo
+    // Interazione
+    function updateFromClientX(clientX){
+      const rect = svg.getBoundingClientRect();
+      const px = clamp(clientX - rect.left, l, W - r);
+      const proportion = (px - l)/plotW;
+      const idx = clamp(Math.round(proportion*(data.length-1)), 0, data.length-1);
+      const p = data[idx];
+      cursorLine.setAttribute('x1', xScale(p.x));
+      cursorLine.setAttribute('x2', xScale(p.x));
+      showTip(p, xScale, yScale);
     }
-    ctx.restore();
-  }
-
-  function drawLine(values, color){
-    const n = values.length - 1;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    values.forEach((v,i)=>{
-      if(v === null) return;
-      const x = mapX(i, n);
-      const y = mapY(v);
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-  }
-
-  function drawToday(centerDate, start, end){
-    const total = Math.max(1, daysBetween(start,end));
-    const i = Math.max(0, Math.min(total, daysBetween(start, centerDate)));
-    const x = mapX(i, total);
-    ctx.save();
-    ctx.strokeStyle = '#6aa6ff';
-    ctx.setLineDash([4,4]);
-    ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, els.canvas.height - PAD.bottom); ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawCrosshair(i){
-    if(!lastData) return;
-    const {total} = lastData;
-    const x = mapX(i, total);
-    ctx.save();
-    ctx.strokeStyle = 'rgba(106,166,255,.9)';
-    ctx.setLineDash([6,4]);
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, els.canvas.height - PAD.bottom); ctx.stroke();
-    ctx.restore();
-  }
-
-  function findCriticals(xs, arr){
-    const out = [];
-    for(let i=1;i<arr.length;i++){
-      if(arr[i-1]===null || arr[i]===null) continue;
-      if((arr[i-1] <= 0 && arr[i] > 0) || (arr[i-1] >= 0 && arr[i] < 0)) out.push(xs[i]);
+    function leave(){
+      tip.hidden = true;
     }
-    return out;
+    // eventi mouse/touch
+    svg.onpointermove = (ev)=>{ updateFromClientX(ev.clientX); };
+    svg.onpointerleave = leave;
+    svg.ontouchstart = (ev)=>{ if(ev.touches?.[0]) updateFromClientX(ev.touches[0].clientX); };
+    svg.ontouchmove = (ev)=>{ if(ev.touches?.[0]) updateFromClientX(ev.touches[0].clientX); };
   }
 
-  function updateStats(dob, target, includeIntu){
-    const dsb = daysBetween(dob, target);
-    const vPh = cycleValue(dsb, periods.ph.days);
-    const vEm = cycleValue(dsb, periods.em.days);
-    const vIn = cycleValue(dsb, periods.intel.days);
-    const vIntu = includeIntu ? cycleValue(dsb, periods.intu.days) : null;
+  function showTip(p, xScale, yScale){
+    const items = state.cycles
+      .map(cy => ({ key:cy.key, name:cy.name, color:`var(--${cy.key})`, val:p[cy.key] }))
+      .sort((a,b)=> Math.abs(b.val) - Math.abs(a.val)); // ordina per importanza
 
-    els.statPh.textContent = percent(vPh) + '%';
-    els.statEm.textContent = percent(vEm) + '%';
-    els.statIn.textContent = percent(vIn) + '%';
-    els.statIntu.textContent = vIntu===null ? '—' : percent(vIntu) + '%';
+    // HTML del tooltip unificato (niente sovrapposizioni)
+    tip.innerHTML = `
+      <div class="t-date">${fmtDate(p.t)} — giorno ${daysBetween(state.birth,p.t)} dalla nascita</div>
+      <ul>
+        ${items.map(it=>`
+          <li class="rowv">
+            <span class="dot ${it.key}" style="width:10px;height:10px;border-radius:50%"></span>
+            <span>${it.name}</span>
+            <span class="val" style="margin-left:auto">${fmtPct(it.val)}</span>
+          </li>`).join('')}
+      </ul>
+    `;
+    tip.hidden = false;
+
+    // posizionamento vicino alla linea, evitando bordi
+    const rect = svg.getBoundingClientRect();
+    const x = xScale(p.x) - rect.left;
+    const y = yScale(0) - rect.top - 10; // sopra la linea zero per stabilità
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+
+    // flip se esce a destra/sinistra
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    const pad = 8;
+    const left = clamp(x - tw/2, pad, rect.width - tw - pad);
+    const top = clamp(y - th - 8, pad, rect.height - th - pad);
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
   }
 
-  // Aggiorna legenda fissa
-  function updateFixedLegend(date, vals, showIntu){
-    els.legendDate.textContent = fmt(date);
-    els.vPh.textContent = (vals.ph!=null? percent(vals.ph)+'%':'—');
-    els.vEm.textContent = (vals.em!=null? percent(vals.em)+'%':'—');
-    els.vIn.textContent = (vals.intel!=null? percent(vals.intel)+'%':'—');
-    if(showIntu){
-      els.rowIntu.style.display='grid';
-      els.vIntu.textContent = (vals.intu!=null? percent(vals.intu)+'%':'—');
-    } else {
-      els.rowIntu.style.display='none';
+  function draw(){
+    if(!state.birth || !state.center) return;
+
+    // dimensioni correnti (responsive)
+    const rect = canvas.getBoundingClientRect();
+    state.width = 1000; state.height = 650; // viewBox fissa, scala via SVG
+    clearSVG();
+
+    // Definizioni (gradient)
+    const defs = el('defs', {});
+    const grad = el('linearGradient',{id:'bgGrad', x1:'0',y1:'0',x2:'0',y2:'1'});
+    grad.appendChild(el('stop',{offset:'0%', stop-color:'#101623'}));
+    grad.appendChild(el('stop',{offset:'100%', stop-color:'#0c111b'}));
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    const data = genData();
+    const {l,r,t,b} = state.padding;
+    const W = state.width, H = state.height;
+
+    const xMin = 0, xMax = state.totalDays; // giorni
+    const yMin = -1, yMax = 1;
+
+    const xScale = x => l + ( (x - xMin) / (xMax - xMin) ) * (W - l - r);
+    const yScale = y => H - b - ( (y - yMin) / (yMax - yMin) ) * (H - t - b);
+
+    // griglia e curve
+    drawGrid(xScale,yScale,data);
+    drawCurves(xScale,yScale,data);
+    drawXAxisTicks(xScale);
+    drawCursor(xScale,yScale,data);
+  }
+
+  function drawXAxisTicks(xScale){
+    // Etichette compatte ai bordi: inizio/fine
+    const {l,r,t,b} = state.padding;
+    const H = state.height, W = state.width;
+    const start = new Date(state.center.getTime() - Math.floor(state.totalDays/2)*MS_DAY);
+    const end = new Date(state.center.getTime() + Math.floor(state.totalDays/2)*MS_DAY);
+    svg.appendChild(text(l, H-b+32, fmtDate(start), { 'text-anchor':'start', fill:'#9aa3b2', 'font-size':12 }));
+    svg.appendChild(text(W-r, H-b+32, fmtDate(end), { 'text-anchor':'end', fill:'#9aa3b2', 'font-size':12 }));
+  }
+
+  // ---------- SVG helpers ----------
+  function el(n, attrs){ const e = document.createElementNS('http://www.w3.org/2000/svg', n); for(const k in attrs){ e.setAttribute(k, attrs[k]); } return e; }
+  const line = (x1,y1,x2,y2,attrs={})=>{ const e=el('line',{x1,y1,x2,y2,...attrs}); return e; };
+  const rect = (x,y,w,h,attrs={})=>{ const e=el('rect',{x,y,width:w,height:h,...attrs}); return e; };
+  const text = (x,y,txt,attrs={})=>{ const e=el('text',{x,y,...attrs}); e.textContent = txt; return e; };
+
+  function pathD(points){
+    // Catmull-Rom to cubic Bezier per curve lisce e precise
+    if(points.length<2) return '';
+    const d=[];
+    for(let i=0;i<points.length;i++){
+      const p0 = points[i-1] || points[i];
+      const p1 = points[i];
+      const p2 = points[i+1] || points[i];
+      const p3 = points[i+2] || p2;
+      if(i===0) d.push(`M ${p1[0]} ${p1[1]}`);
+      const c1x = p1[0] + (p2[0]-p0[0])/6;
+      const c1y = p1[1] + (p2[1]-p0[1])/6;
+      const c2x = p2[0] - (p3[0]-p1[0])/6;
+      const c2y = p2[1] - (p3[1]-p1[1])/6;
+      d.push(`C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2[0]} ${p2[1]}`);
     }
+    return d.join(' ');
   }
 
-  function render(){
-    if(!els.dob.value){ // niente alert prima dell’input; disegna solo assi
-      clearCanvas(); drawAxes(new Date(), new Date());
-      return;
-    }
-    if(!els.target.value){ els.target.value = toISO(new Date()); }
-    const dob = parseISO(els.dob.value);
-    const target = parseISO(els.target.value);
-    const span = Math.max(7, Math.min(120, Number(els.span.value)||30));
-    els.span.value = span;
-
-    const data = computeSeries(dob, target, span, els.showIntu.checked);
-    lastData = {...data, total: data.xs.length-1};
-
-    updateStats(dob, target, els.showIntu.checked);
-
-    clearCanvas();
-    drawAxes(data.start, data.end);
-    drawLine(data.series.ph, periods.ph.color);
-    drawLine(data.series.em, periods.em.color);
-    drawLine(data.series.intel, periods.intel.color);
-    if(els.showIntu.checked) drawLine(data.series.intu, periods.intu.color);
-    drawToday(target, data.start, data.end);
-
-    // punti critici
-    const crits = [
-      ...findCriticals(data.xs, data.series.ph).map(d=>({d,color:periods.ph.color})),
-      ...findCriticals(data.xs, data.series.em).map(d=>({d,color:periods.em.color})),
-      ...findCriticals(data.xs, data.series.intel).map(d=>({d,color:periods.intel.color})),
-      ...(els.showIntu.checked ? findCriticals(data.xs, data.series.intu).map(d=>({d,color:periods.intu.color})) : [])
-    ];
-    const total = data.xs.length - 1;
-    crits.forEach(({d,color})=>{
-      const i = daysBetween(data.start,d);
-      const x = mapX(i, total);
-      const y = mapY(0);
-      ctx.fillStyle = color; ctx.strokeStyle = '#000'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
-    });
-
-    // legenda fissa iniziale = data di riferimento
-    const idx = Math.max(0, Math.min(lastData.total, daysBetween(lastData.start, target)));
-    updateFixedLegend(
-      lastData.xs[idx],
-      {
-        ph: lastData.series.ph[idx],
-        em: lastData.series.em[idx],
-        intel: lastData.series.intel[idx],
-        intu: lastData.series.intu[idx]
-      },
-      els.showIntu.checked
-    );
-
-    // se c'è un crossIndex attivo, ridisegna il marcatore sopra
-    if(crossIndex!=null){ drawCrosshair(crossIndex); }
+  function fmtDate(d){
+    // dd MMM yyyy in italiano
+    const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+    return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
   }
 
-  // ========= Interazione: crosshair + legenda fissa aggiornata (auto-lato) =========
-  function nearestIndexFromClientX(clientX){
-    if(!lastData) return null;
-    const rect = els.canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const i = Math.round((x/els.canvas.width) * lastData.total);
-    return Math.max(0, Math.min(lastData.total, i));
-  }
-
-  function updateInteractionAt(i){
-    if(!lastData) return;
-    crossIndex = i;
-    render(); // ridisegna tutto (marcatore incluso)
-
-    // aggiorna legenda sui valori correnti
-    updateFixedLegend(
-      lastData.xs[i],
-      {
-        ph: lastData.series.ph[i],
-        em: lastData.series.em[i],
-        intel: lastData.series.intel[i],
-        intu: lastData.series.intu[i]
-      },
-      els.showIntu.checked
-    );
-
-    // sposta la legenda a sinistra/destra per non coprire il punto attivo
-    const half = els.canvas.width / 2;
-    const x = mapX(i, lastData.total);
-    const isRight = x > half;
-    els.legendBox.style.left  = isRight ? '' : '10px';
-    els.legendBox.style.right = isRight ? '10px' : '';
-  }
-
-  function clearInteraction(){
-    crossIndex = null;
-    // reset posizione legenda lato sinistro
-    els.legendBox.style.right = '';
-    els.legendBox.style.left  = '10px';
-    render();
-  }
-
-  // Mouse
-  els.canvas.addEventListener('mousemove', (e)=>{
-    const i = nearestIndexFromClientX(e.clientX);
-    if(i==null) return;
-    updateInteractionAt(i);
-  });
-  els.canvas.addEventListener('mouseleave', clearInteraction);
-
-  // Touch
-  els.canvas.addEventListener('touchstart', (e)=>{
-    const t = e.changedTouches[0];
-    const i = nearestIndexFromClientX(t.clientX);
-    if(i==null) return;
-    updateInteractionAt(i);
-  }, {passive:true});
-  els.canvas.addEventListener('touchmove', (e)=>{
-    const t = e.changedTouches[0];
-    const i = nearestIndexFromClientX(t.clientX);
-    if(i==null) return;
-    updateInteractionAt(i);
-  }, {passive:true});
-  els.canvas.addEventListener('touchend', clearInteraction);
-  els.canvas.addEventListener('touchcancel', clearInteraction);
-
-  // ========= Eventi base =========
-  els.draw.addEventListener('click', ()=>{ render(); });
-  els.todayBtn.addEventListener('click', ()=>{ els.target.value = toISO(new Date()); render(); });
-  [els.dob, els.target, els.span, els.showIntu].forEach(el=> el.addEventListener('change', ()=>{ render(); }));
-
-  // Condivisione via URL
-  els.shareBtn.addEventListener('click', ()=>{
-    if(!els.dob.value){ alert('Inserisci la data di nascita.'); return; }
-    const p = new URLSearchParams();
-    p.set('dob', els.dob.value);
-    if(els.target.value) p.set('t', els.target.value);
-    p.set('span', els.span.value);
-    if(els.showIntu.checked) p.set('intu', '1');
-    if(els.name.value) p.set('name', els.name.value);
-    const url = location.origin + location.pathname + '?' + p.toString();
-    navigator.clipboard?.writeText(url);
-    alert('Link copiato negli appunti:\n' + url);
-  });
-
-  // Salva PNG
-  els.saveBtn.addEventListener('click', ()=>{
-    const a = document.createElement('a');
-    const name = els.name.value ? `_${els.name.value}` : '';
-    a.download = `bioritmo${name || ''}_${els.target.value || toISO(new Date())}.png`;
-    a.href = els.canvas.toDataURL('image/png');
-    a.click();
-  });
-
-  // Retina fit & redraw
-  const ctx2d = els.canvas.getContext('2d');
-  function fitCanvas(){
-    const ratio = window.devicePixelRatio || 1;
-    const w = Math.max(300, els.canvas.clientWidth);
-    const h = Math.max(260, els.canvas.clientHeight);
-    const W = Math.round(w*ratio), H = Math.round(h*ratio);
-    if(els.canvas.width !== W || els.canvas.height !== H){
-      els.canvas.width = W; els.canvas.height = H;
-      ctx2d.setTransform(ratio,0,0,ratio,0,0);
-      render();
-    }
-  }
-  window.addEventListener('resize', ()=>{ fitCanvas(); });
-
-  // Primo render (ed eventuali parametri via URL)
-  fitCanvas();
-  if(els.dob.value){ render(); } else { clearCanvas(); drawAxes(new Date(), new Date()); }
+  // Primo disegno
+  draw();
 })();
 </script>
 </body>
