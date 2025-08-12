@@ -30,10 +30,12 @@
     background:var(--panel); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid #222838;
   }
   .controls{
-    display:grid; grid-template-columns:1fr; gap:var(--gap); padding:14px; }
+    display:grid; grid-template-columns:1fr; gap:var(--gap); padding:14px;
+  }
   .row{ display:grid; gap:10px; grid-template-columns: 1fr 1fr; }
   .row > * { min-width:0; }
   .row-3{ grid-template-columns: 1fr 1fr 1fr; }
+  .row-btns{ display:flex; flex-wrap:wrap; gap:8px; }
   label{ font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
   input, select, button{
     width:100%; box-sizing:border-box; background:#0f131b; color:var(--ink);
@@ -56,7 +58,7 @@
     background:linear-gradient(180deg,#101520,#0f141f);
     border:1px solid #1e2431; border-radius:12px; overflow:hidden;
   }
-  /* TWEAK #1: blocca lo scroll durante drag sul grafico */
+  /* Blocca scroll durante drag sul grafico */
   .canvas svg { touch-action: none; }
 
   svg{ width:100%; height:100%; display:block; }
@@ -86,10 +88,18 @@
     .chip{ font-size:12px; padding:6px 8px; }
     .canvas{ aspect-ratio: 4/3; }
   }
-  /* TWEAK #3: legenda ancora più compatta sotto 420px */
+  /* Legenda ancora più compatta sotto 420px */
   @media (max-width:420px){
     .legend{ gap:4px }
     .chip{ padding:4px 8px; font-size:11.5px }
+  }
+
+  /* Stampa/PDF: margini puliti e sfondo chiaro */
+  @media print{
+    body{ background:#fff }
+    .panel{ box-shadow:none; border:0 }
+    .help,.controls,header{ display:none }
+    .canvas{ border:0; }
   }
 </style>
 </head>
@@ -132,6 +142,12 @@
           <button id="today">Vai a oggi</button>
         </div>
       </div>
+
+      <div class="row-btns" aria-label="Azioni">
+        <button id="exportPng">Esporta PNG</button>
+        <button id="exportPdf">Esporta PDF</button>
+        <button id="copyLink">Copia link con parametri</button>
+      </div>
     </section>
 
     <section class="panel chart-card" aria-label="Grafico bioritmo">
@@ -146,7 +162,7 @@
         <svg id="svg" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
           <title id="title">Grafico dei bioritmi</title>
           <desc id="desc">Curve dei cicli Fisico, Emotivo e Intellettuale su intervallo selezionato. Scala da -100% a +100% con linea dello zero.</desc>
-          <!-- Griglia e assi verranno inseriti via JS -->
+          <!-- Griglia e assi via JS -->
         </svg>
         <div class="tip" id="tip" hidden></div>
       </div>
@@ -189,28 +205,87 @@
   const rangeEl = document.getElementById('range');
   const granEl = document.getElementById('gran');
   const todayBtn = document.getElementById('today');
+  const exportPngBtn = document.getElementById('exportPng');
+  const exportPdfBtn = document.getElementById('exportPdf');
+  const copyLinkBtn  = document.getElementById('copyLink');
+
   const svg = document.getElementById('svg');
   const tip = document.getElementById('tip');
   const canvas = document.getElementById('canvas');
 
-  // Default valori
-  const today = new Date();
-  centerEl.value = toISODate(today);
-  state.center = parseDate(centerEl.value);
+  // ---------- URL <-> Stato ----------
+  function paramsFromURL(){
+    const u = new URL(location.href);
+    const b = u.searchParams.get('b'); // birth yyyy-mm-dd
+    const c = u.searchParams.get('c'); // center yyyy-mm-dd
+    const r = u.searchParams.get('r'); // range
+    const g = u.searchParams.get('g'); // gran
+    if(b) { birthEl.value = b; state.birth = parseDate(b); }
+    if(c) { centerEl.value = c; state.center = parseDate(c); }
+    if(r) { rangeEl.value = r; state.totalDays = +r; }
+    if(g) { granEl.value = g; state.step = +g; }
+  }
+  function pushURL(){
+    const u = new URL(location.href);
+    u.searchParams.set('b', birthEl.value);
+    u.searchParams.set('c', centerEl.value);
+    u.searchParams.set('r', rangeEl.value);
+    u.searchParams.set('g', granEl.value);
+    history.replaceState(null, '', u);
+  }
 
-  // Prova a impostare una data di nascita plausibile (30 anni fa)
-  const dfltBirth = new Date(today.getFullYear()-30, today.getMonth(), today.getDate());
-  birthEl.value = toISODate(dfltBirth);
-  state.birth = parseDate(birthEl.value);
+  // Default valori (solo se non presenti in URL)
+  (function initDefaults(){
+    const u = new URL(location.href);
+    if(!u.searchParams.get('c')){
+      const today = new Date();
+      centerEl.value = toISODate(today);
+      state.center = parseDate(centerEl.value);
+    } else {
+      state.center = parseDate(centerEl.value);
+    }
+    if(!u.searchParams.get('b')){
+      const today = new Date();
+      const dfltBirth = new Date(today.getFullYear()-30, today.getMonth(), today.getDate());
+      birthEl.value = toISODate(dfltBirth);
+      state.birth = parseDate(birthEl.value);
+    } else {
+      state.birth = parseDate(birthEl.value);
+    }
+  })();
+
+  // Carica eventuali parametri dall’URL e disegna
+  paramsFromURL();
 
   // ---------- Eventi ----------
-  birthEl.addEventListener('change', ()=>{ state.birth = parseDate(birthEl.value); draw(); });
-  centerEl.addEventListener('change', ()=>{ state.center = parseDate(centerEl.value); draw(); });
-  rangeEl.addEventListener('change', ()=>{ state.totalDays = +rangeEl.value; draw(); });
-  granEl.addEventListener('change', ()=>{ state.step = +granEl.value; draw(); });
-  todayBtn.addEventListener('click', ()=>{ centerEl.value = toISODate(new Date()); state.center = parseDate(centerEl.value); draw(); });
+  function onChange(){ pushURL(); draw(); }
+  birthEl.addEventListener('change', ()=>{ state.birth = parseDate(birthEl.value); onChange(); });
+  centerEl.addEventListener('change', ()=>{ state.center = parseDate(centerEl.value); onChange(); });
+  rangeEl.addEventListener('change', ()=>{ state.totalDays = +rangeEl.value; onChange(); });
+  granEl.addEventListener('change', ()=>{ state.step = +granEl.value; onChange(); });
+  todayBtn.addEventListener('click', ()=>{ centerEl.value = toISODate(new Date()); state.center = parseDate(centerEl.value); onChange(); });
 
-  // Ridisegna al resize mantenendo rapporto
+  copyLinkBtn.addEventListener('click', async ()=>{
+    pushURL();
+    try{
+      await navigator.clipboard.writeText(location.href);
+      toast('Link copiato ✅');
+    }catch(e){
+      prompt('Copia il link:', location.href);
+    }
+  });
+
+  exportPngBtn.addEventListener('click', async ()=>{
+    const dataUrl = await exportCurrentChartPNG(2); // 2x
+    downloadDataURL(dataUrl, fileBaseName() + '.png');
+  });
+
+  exportPdfBtn.addEventListener('click', async ()=>{
+    const dataUrl = await exportCurrentChartPNG(2);
+    openPrintWindow(dataUrl);
+  });
+
+  // Ridisegna al resize
   new ResizeObserver(()=> draw()).observe(canvas);
 
   // ---------- Calcolo bioritmi ----------
@@ -274,7 +349,7 @@
     svg.appendChild(g);
   }
 
-  // TWEAK #4: usa polilinee lineari per evitare overshoot
+  // Curve lineari (no overshoot)
   function drawCurves(xScale, yScale, data){
     const g = el('g', { fill:'none' });
     state.cycles.forEach(cy=>{
@@ -334,15 +409,15 @@
     `;
     tip.hidden = false;
 
-    // TWEAK #2: margine extra e clamp robusto ai bordi
+    // margine extra e clamp robusto ai bordi
     const rect = svg.getBoundingClientRect();
     const x = xScale(p.x) - rect.left;
-    const y = yScale(0) - rect.top - 10; // stabile vicino alla linea zero
+    const y = yScale(0) - rect.top - 10;
     tip.style.left = x + 'px';
     tip.style.top = y + 'px';
 
     const tw = tip.offsetWidth, th = tip.offsetHeight;
-    const pad = 12; // aumentato
+    const pad = 12;
     const left = clamp(x - tw/2, pad, rect.width - tw - pad);
     const top  = clamp(y - th - 10, pad, rect.height - th - pad);
     tip.style.left = left + 'px';
@@ -351,13 +426,10 @@
 
   function draw(){
     if(!state.birth || !state.center) return;
-
-    // dimensioni correnti (responsive)
-    const rect = canvas.getBoundingClientRect();
     state.width = 1000; state.height = 650; // viewBox fisso
     clearSVG();
 
-    // Definizioni (gradient)
+    // Defs (gradient)
     const defs = el('defs', {});
     const grad = el('linearGradient',{id:'bgGrad', x1:'0',y1:'0',x2:'0',y2:'1'});
     grad.appendChild(el('stop',{offset:'0%', 'stop-color':'#101623'}));
@@ -369,20 +441,19 @@
     const {l,r,t,b} = state.padding;
     const W = state.width, H = state.height;
 
-    const xMin = 0, xMax = state.totalDays; // giorni
+    const xMin = 0, xMax = state.totalDays;
     const yMin = -1, yMax = 1;
 
     const xScale = x => l + ( (x - xMin) / (xMax - xMin) ) * (W - l - r);
     const yScale = y => H - b - ( (y - yMin) / (yMax - yMin) ) * (H - t - b);
 
-    // griglia e curve
     drawGrid(xScale,yScale,data);
     drawCurves(xScale,yScale,data);
-    drawXAxisTicks(xScale);
+    drawXAxisTicks();
     drawCursor(xScale,yScale,data);
   }
 
-  function drawXAxisTicks(xScale){
+  function drawXAxisTicks(){
     const {l,r,t,b} = state.padding;
     const H = state.height, W = state.width;
     const start = new Date(state.center.getTime() - Math.floor(state.totalDays/2)*MS_DAY);
@@ -391,13 +462,125 @@
     svg.appendChild(text(W-r, H-b+32, fmtDate(end), { 'text-anchor':'end', fill:'#9aa3b2', 'font-size':12 }));
   }
 
+  // ---------- Export helpers ----------
+  function resolveColor(varName){
+    const root = getComputedStyle(document.documentElement);
+    return root.getPropertyValue(varName).trim() || '#000';
+  }
+
+  async function exportCurrentChartPNG(scale=2){
+    // Clona l’SVG e sostituisci i colori CSS var(--x) con valori assoluti
+    const clone = svg.cloneNode(true);
+
+    // sostituisci stroke calc con colori reali
+    const colorMap = {
+      p: resolveColor('--p'),
+      e: resolveColor('--e'),
+      i: resolveColor('--i'),
+      zero: resolveColor('--zero'),
+      grid: resolveColor('--grid')
+    };
+    clone.querySelectorAll('path').forEach(p=>{
+      const s = p.getAttribute('stroke');
+      if(s && s.startsWith('var(--')){
+        const key = s.replace('var(--','').replace(')','').trim();
+        p.setAttribute('stroke', colorMap[key] || '#000');
+      }
+    });
+    clone.querySelectorAll('line').forEach(l=>{
+      const s = l.getAttribute('stroke');
+      if(s && s.startsWith('var(--')){
+        const key = s.replace('var(--','').replace(')','').trim();
+        l.setAttribute('stroke', colorMap[key] || '#000');
+      }
+    });
+    // Forza font family in SVG per export
+    clone.setAttribute('font-family', getComputedStyle(document.body).fontFamily);
+
+    // Assicura namespace
+    if(!clone.getAttribute('xmlns')) clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(clone);
+    const svgBlob = new Blob([svgStr], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    const vb = (svg.getAttribute('viewBox')||'0 0 1000 650').split(' ').map(Number);
+    const w = vb[2], h = vb[3];
+
+    const cnv = document.createElement('canvas');
+    cnv.width = Math.round(w*scale);
+    cnv.height = Math.round(h*scale);
+    const ctx = cnv.getContext('2d');
+
+    // Sfondo come nel canvas (gradiente approssimato)
+    const g = ctx.createLinearGradient(0,0,0,cnv.height);
+    g.addColorStop(0, '#101623'); g.addColorStop(1, '#0c111b');
+    ctx.fillStyle = g; ctx.fillRect(0,0,cnv.width,cnv.height);
+
+    await new Promise((res,rej)=>{
+      img.onload = ()=>{ 
+        ctx.drawImage(img, 0, 0, cnv.width, cnv.height);
+        URL.revokeObjectURL(url);
+        res();
+      };
+      img.onerror = rej;
+      img.src = url;
+    });
+    return cnv.toDataURL('image/png');
+  }
+
+  function openPrintWindow(pngDataURL){
+    const win = window.open('', '_blank');
+    const title = 'Bioritmo';
+    // A4 orizzontale: impaginazione responsive
+    win.document.write(`
+      <html><head><title>${title}</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+        .wrap { display:flex; align-items:center; justify-content:center; padding:0; }
+        img { max-width:100%; height:auto; display:block; }
+        .meta { font-size:12px; color:#333; margin:10px 0; text-align:center; }
+      </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <div>
+            <img src="${pngDataURL}" alt="Bioritmo" />
+            <div class="meta">${metaString()}</div>
+          </div>
+        </div>
+        <script>window.onload = () => setTimeout(()=> window.print(), 150);<\/script>
+      </body></html>
+    `);
+    win.document.close();
+  }
+
+  function downloadDataURL(dataUrl, filename){
+    const a = document.createElement('a');
+    a.href = dataUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  function fileBaseName(){
+    const b = birthEl.value || 'nascita';
+    const c = centerEl.value || 'centro';
+    return `bioritmo_${b}_ref_${c}`;
+  }
+
+  function metaString(){
+    return `Nascita: ${birthEl.value} · Riferimento: ${centerEl.value} · Intervallo: ${rangeEl.value}g · Granularità: ${granEl.value}g`;
+  }
+
   // ---------- SVG helpers ----------
   function el(n, attrs){ const e = document.createElementNS('http://www.w3.org/2000/svg', n); for(const k in attrs){ e.setAttribute(k, attrs[k]); } return e; }
   const line = (x1,y1,x2,y2,attrs={})=>{ const e=el('line',{x1,y1,x2,y2,...attrs}); return e; };
   const rect = (x,y,w,h,attrs={})=>{ const e=el('rect',{x,y,width:w,height:h,...attrs}); return e; };
   const text = (x,y,txt,attrs={})=>{ const e=el('text',{x,y,...attrs}); e.textContent = txt; return e; };
 
-  // Polilinea lineare (niente overshoot)
+  // Polilinea lineare
   function pathLinear(points){
     if(points.length<2) return '';
     let d = `M ${points[0][0]} ${points[0][1]}`;
@@ -412,8 +595,22 @@
     return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
   }
 
+  function toast(msg){
+    const t = document.createElement('div');
+    t.textContent = msg;
+    Object.assign(t.style, {
+      position:'fixed', left:'50%', bottom:'20px', transform:'translateX(-50%)',
+      background:'#111827', color:'#e5e7eb', border:'1px solid #374151',
+      padding:'10px 14px', borderRadius:'10px', zIndex:9999, boxShadow:'0 8px 24px rgba(0,0,0,.35)',
+      fontSize:'13px'
+    });
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; }, 1600);
+    setTimeout(()=> t.remove(), 2000);
+  }
+
   // Primo disegno
-  draw();
+  draw(); pushURL();
 })();
 </script>
 </body>
