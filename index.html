@@ -10,7 +10,7 @@
     --p:#4da3ff; --e:#ff6b88; --i:#55d69e; --zero:#c7cbd4;
     --accent:#ffd166; --focus:#7ab8ff33;
     --radius:14px; --gap:12px; --shadow:0 6px 20px rgba(0,0,0,.35);
-    font-synthesis-weight:none; /* testo più nitido */
+    font-synthesis-weight:none;
   }
   html,body{height:100%}
   body{
@@ -56,6 +56,9 @@
     background:linear-gradient(180deg,#101520,#0f141f);
     border:1px solid #1e2431; border-radius:12px; overflow:hidden;
   }
+  /* TWEAK #1: blocca lo scroll durante drag sul grafico */
+  .canvas svg { touch-action: none; }
+
   svg{ width:100%; height:100%; display:block; }
 
   /* Tooltip */
@@ -82,6 +85,11 @@
     .legend{ gap:6px; }
     .chip{ font-size:12px; padding:6px 8px; }
     .canvas{ aspect-ratio: 4/3; }
+  }
+  /* TWEAK #3: legenda ancora più compatta sotto 420px */
+  @media (max-width:420px){
+    .legend{ gap:4px }
+    .chip{ padding:4px 8px; font-size:11.5px }
   }
 </style>
 </head>
@@ -232,7 +240,6 @@
   }
   function drawGrid(xScale, yScale, data){
     const g = el('g', { 'aria-hidden':'true' });
-    // area disegno
     const {l,r,t,b} = state.padding;
     const W = state.width, H = state.height;
     const plotW = W - l - r, plotH = H - t - b;
@@ -249,7 +256,7 @@
       g.appendChild(text(l-10, y+4, label, { 'text-anchor':'end', fill:isZero? 'var(--zero)':'#9aa3b2', 'font-size':12 }));
     });
 
-    // linee verticali (una ogni 5 giorni circa)
+    // linee verticali (una ogni ~6 tacche)
     const approx = Math.max(5, Math.round(data.length/6));
     for(let i=0;i<data.length;i+=approx){
       const x = xScale(i*state.step);
@@ -267,10 +274,12 @@
     svg.appendChild(g);
   }
 
+  // TWEAK #4: usa polilinee lineari per evitare overshoot
   function drawCurves(xScale, yScale, data){
     const g = el('g', { fill:'none' });
     state.cycles.forEach(cy=>{
-      const d = pathD(data.map((p,idx)=>[ xScale(p.x), yScale(p[cy.key]) ]));
+      const pts = data.map(p=>[ xScale(p.x), yScale(p[cy.key]) ]);
+      const d = pathLinear(pts);
       g.appendChild(el('path', { d, stroke: `var(--${cy.key})`, 'stroke-width':2.2, 'vector-effect':'non-scaling-stroke' }));
     });
     svg.appendChild(g);
@@ -301,7 +310,6 @@
     function leave(){
       tip.hidden = true;
     }
-    // eventi mouse/touch
     svg.onpointermove = (ev)=>{ updateFromClientX(ev.clientX); };
     svg.onpointerleave = leave;
     svg.ontouchstart = (ev)=>{ if(ev.touches?.[0]) updateFromClientX(ev.touches[0].clientX); };
@@ -311,9 +319,8 @@
   function showTip(p, xScale, yScale){
     const items = state.cycles
       .map(cy => ({ key:cy.key, name:cy.name, color:`var(--${cy.key})`, val:p[cy.key] }))
-      .sort((a,b)=> Math.abs(b.val) - Math.abs(a.val)); // ordina per importanza
+      .sort((a,b)=> Math.abs(b.val) - Math.abs(a.val));
 
-    // HTML del tooltip unificato (niente sovrapposizioni)
     tip.innerHTML = `
       <div class="t-date">${fmtDate(p.t)} — giorno ${daysBetween(state.birth,p.t)} dalla nascita</div>
       <ul>
@@ -327,18 +334,17 @@
     `;
     tip.hidden = false;
 
-    // posizionamento vicino alla linea, evitando bordi
+    // TWEAK #2: margine extra e clamp robusto ai bordi
     const rect = svg.getBoundingClientRect();
     const x = xScale(p.x) - rect.left;
-    const y = yScale(0) - rect.top - 10; // sopra la linea zero per stabilità
+    const y = yScale(0) - rect.top - 10; // stabile vicino alla linea zero
     tip.style.left = x + 'px';
     tip.style.top = y + 'px';
 
-    // flip se esce a destra/sinistra
     const tw = tip.offsetWidth, th = tip.offsetHeight;
-    const pad = 8;
+    const pad = 12; // aumentato
     const left = clamp(x - tw/2, pad, rect.width - tw - pad);
-    const top = clamp(y - th - 8, pad, rect.height - th - pad);
+    const top  = clamp(y - th - 10, pad, rect.height - th - pad);
     tip.style.left = left + 'px';
     tip.style.top = top + 'px';
   }
@@ -348,14 +354,14 @@
 
     // dimensioni correnti (responsive)
     const rect = canvas.getBoundingClientRect();
-    state.width = 1000; state.height = 650; // viewBox fissa, scala via SVG
+    state.width = 1000; state.height = 650; // viewBox fisso
     clearSVG();
 
     // Definizioni (gradient)
     const defs = el('defs', {});
     const grad = el('linearGradient',{id:'bgGrad', x1:'0',y1:'0',x2:'0',y2:'1'});
-    grad.appendChild(el('stop',{offset:'0%', stop-color:'#101623'}));
-    grad.appendChild(el('stop',{offset:'100%', stop-color:'#0c111b'}));
+    grad.appendChild(el('stop',{offset:'0%', 'stop-color':'#101623'}));
+    grad.appendChild(el('stop',{offset:'100%', 'stop-color':'#0c111b'}));
     defs.appendChild(grad);
     svg.appendChild(defs);
 
@@ -377,7 +383,6 @@
   }
 
   function drawXAxisTicks(xScale){
-    // Etichette compatte ai bordi: inizio/fine
     const {l,r,t,b} = state.padding;
     const H = state.height, W = state.width;
     const start = new Date(state.center.getTime() - Math.floor(state.totalDays/2)*MS_DAY);
@@ -392,27 +397,17 @@
   const rect = (x,y,w,h,attrs={})=>{ const e=el('rect',{x,y,width:w,height:h,...attrs}); return e; };
   const text = (x,y,txt,attrs={})=>{ const e=el('text',{x,y,...attrs}); e.textContent = txt; return e; };
 
-  function pathD(points){
-    // Catmull-Rom to cubic Bezier per curve lisce e precise
+  // Polilinea lineare (niente overshoot)
+  function pathLinear(points){
     if(points.length<2) return '';
-    const d=[];
-    for(let i=0;i<points.length;i++){
-      const p0 = points[i-1] || points[i];
-      const p1 = points[i];
-      const p2 = points[i+1] || points[i];
-      const p3 = points[i+2] || p2;
-      if(i===0) d.push(`M ${p1[0]} ${p1[1]}`);
-      const c1x = p1[0] + (p2[0]-p0[0])/6;
-      const c1y = p1[1] + (p2[1]-p0[1])/6;
-      const c2x = p2[0] - (p3[0]-p1[0])/6;
-      const c2y = p2[1] - (p3[1]-p1[1])/6;
-      d.push(`C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2[0]} ${p2[1]}`);
+    let d = `M ${points[0][0]} ${points[0][1]}`;
+    for(let i=1;i<points.length;i++){
+      d += ` L ${points[i][0]} ${points[i][1]}`;
     }
-    return d.join(' ');
+    return d;
   }
 
   function fmtDate(d){
-    // dd MMM yyyy in italiano
     const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
     return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
   }
